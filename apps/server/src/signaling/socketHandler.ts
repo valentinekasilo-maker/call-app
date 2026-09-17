@@ -42,8 +42,10 @@ export function setupSocketHandler(io: Server): void {
       const payload = await resolveTokenToPayload(token);
       socket.user = payload;
       socket.deviceType = deviceType;
+      console.log(`[SocketAuth] Authenticated socket ${socket.id} for user ${payload.name} (App ID: ${payload.appId})`);
       next();
     } catch (err: any) {
+      console.error('[SocketAuth] Authentication failed:', err.message);
       next(new Error('Invalid or expired authentication token'));
     }
   });
@@ -55,10 +57,16 @@ export function setupSocketHandler(io: Server): void {
     }
 
     const { appId, name } = socket.user;
+    const cleanAppId = appId.replace(/\D/g, '');
     const deviceType = socket.deviceType || 'web';
 
     // Register with Presence Manager
-    PresenceManager.registerSocket(appId, socket, deviceType);
+    PresenceManager.registerSocket(cleanAppId, socket, deviceType);
+
+    // Keep session alive on ANY incoming event from this socket
+    socket.onAny(() => {
+      PresenceManager.updatePing(socket.id);
+    });
 
     // Ping / Pong for presence heartbeat
     socket.on('presence:ping', () => {

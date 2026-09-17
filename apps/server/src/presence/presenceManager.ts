@@ -9,62 +9,67 @@ interface DeviceSession {
 
 export class PresenceManager {
   private static io: Server;
-  // Map of appId -> Map of socketId -> DeviceSession
+  // Map of clean appId -> Map of socketId -> DeviceSession
   private static userSockets = new Map<string, Map<string, DeviceSession>>();
-  // Map of socketId -> appId
+  // Map of socketId -> clean appId
   private static socketToAppId = new Map<string, string>();
-  // Map of appId -> in_call boolean
+  // Map of clean appId -> in_call boolean
   private static userInCall = new Map<string, boolean>();
-  // Map of appId -> API device presence
+  // Map of clean appId -> API device presence
   private static apiPresence = new Map<string, { status: 'online' | 'offline' | 'busy'; lastPing: number; platform?: string }>();
 
   static init(io: Server): void {
     this.io = io;
 
-    // Heartbeat check every 10 seconds (unref'd so it does not block clean test exit)
+    // Heartbeat check every 15 seconds (unref'd so it does not block clean test exit)
     const sweepInterval = setInterval(() => {
       this.sweepStaleSessions();
-    }, 10000);
+    }, 15000);
     sweepInterval.unref();
   }
 
   static setApiPresence(appId: string, status: 'online' | 'offline' | 'busy', platform?: string): void {
+    const cleanId = appId.replace(/\D/g, '');
+    if (!cleanId) return;
+
     if (status === 'offline') {
-      this.apiPresence.delete(appId);
+      this.apiPresence.delete(cleanId);
     } else {
-      this.apiPresence.set(appId, {
+      this.apiPresence.set(cleanId, {
         status,
         lastPing: Date.now(),
         platform,
       });
     }
-    this.broadcastPresence(appId, this.getPresence(appId));
+    this.broadcastPresence(cleanId, this.getPresence(cleanId));
   }
 
   static clearApiPresence(appId: string): void {
-    this.apiPresence.delete(appId);
-    this.broadcastPresence(appId, this.getPresence(appId));
+    const cleanId = appId.replace(/\D/g, '');
+    if (!cleanId) return;
+    this.apiPresence.delete(cleanId);
+    this.broadcastPresence(cleanId, this.getPresence(cleanId));
   }
 
   static registerSocket(appId: string, socket: Socket, deviceType: 'web' | 'desktop' = 'web'): void {
-    if (!this.userSockets.has(appId)) {
-      this.userSockets.set(appId, new Map());
+    const cleanId = appId.replace(/\D/g, '');
+    if (!cleanId) return;
+
+    if (!this.userSockets.has(cleanId)) {
+      this.userSockets.set(cleanId, new Map());
     }
 
-    const sessions = this.userSockets.get(appId)!;
-    const isFirstSession = sessions.size === 0;
-
+    const sessions = this.userSockets.get(cleanId)!;
     sessions.set(socket.id, {
       socketId: socket.id,
       deviceType,
       lastPing: Date.now(),
     });
 
-    this.socketToAppId.set(socket.id, appId);
+    this.socketToAppId.set(socket.id, cleanId);
 
-    if (isFirstSession) {
-      this.broadcastPresence(appId, this.getPresence(appId));
-    }
+    console.log(`[PresenceManager] PRESENCE: app_id=${cleanId} socket_id=${socket.id} device=${deviceType} active_sessions=${sessions.size} status=online`);
+    this.broadcastPresence(cleanId, this.getPresence(cleanId));
   }
 
   static unregisterSocket(socketId: string): void {
@@ -76,9 +81,13 @@ export class PresenceManager {
     const sessions = this.userSockets.get(appId);
     if (sessions) {
       sessions.delete(socketId);
+      console.log(`[PresenceManager] PRESENCE DISCONNECT: socket_id=${socketId} app_id=${appId} remaining_sessions=${sessions.size}`);
       if (sessions.size === 0) {
         this.userSockets.delete(appId);
         this.userInCall.delete(appId);
+        this.broadcastPresence(appId, this.getPresence(appId));
+      } else {
+        // Multi-device: still online
         this.broadcastPresence(appId, this.getPresence(appId));
       }
     }
@@ -95,25 +104,47 @@ export class PresenceManager {
   }
 
   static setInCall(appId: string, inCall: boolean): void {
+    const cleanId = appId.replace(/\D/g, '');
+    if (!cleanId) return;
+
     if (inCall) {
-      this.userInCall.set(appId, true);
+      this.userInCall.set(cleanId, true);
     } else {
-      this.userInCall.delete(appId);
+      this.userInCall.delete(cleanId);
     }
-    this.broadcastPresence(appId, this.getPresence(appId));
+    this.broadcastPresence(cleanId, this.getPresence(cleanId));
   }
 
   static getPresence(appId: string): UserPresence {
-    if (this.userInCall.get(appId)) {
+    const cleanId = appId.replace(/\D/g, '');
+    if (!cleanId) return 'offline';
+
+    if (this.userInCall.get(cleanId)) {
       return 'in_call';
     }
 
-    const sessions = this.userSockets.get(appId);
+    const sessions = this.userSockets.get(cleanId);
     if (sessions && sessions.size > 0) {
-      return 'online';
+      // Check if at least one socket is actively connected in Socket.IO
+      if (this.io?.sockets?.sockets) {
+        for (const [socketId] of sessions) {
+          const liveSocket = this.io.sockets.sockets.get(socketId);
+          if (liveSocket && liveSocket.connected) {
+            return 'online';
+          }
+        }
+      }
+
+      // Fallback: If sessions map has entries within ping window
+      const now = Date.now();
+      for (const [, session] of sessions) {
+        if (now - session.lastPing < 60000) {
+          return 'online';
+        }
+      }
     }
 
-    const api = this.apiPresence.get(appId);
+    const api = this.apiPresence.get(cleanId);
     if (api) {
       if (api.status === 'busy') return 'in_call';
       if (api.status === 'online') return 'online';
@@ -123,9 +154,22 @@ export class PresenceManager {
   }
 
   static getSocketsForAppId(appId: string): string[] {
-    const sessions = this.userSockets.get(appId);
+    const cleanId = appId.replace(/\D/g, '');
+    const sessions = this.userSockets.get(cleanId);
     if (!sessions) return [];
-    return Array.from(sessions.keys());
+
+    const activeSocketIds: string[] = [];
+    for (const socketId of sessions.keys()) {
+      if (this.io?.sockets?.sockets) {
+        const liveSocket = this.io.sockets.sockets.get(socketId);
+        if (liveSocket && liveSocket.connected) {
+          activeSocketIds.push(socketId);
+        }
+      } else {
+        activeSocketIds.push(socketId);
+      }
+    }
+    return activeSocketIds;
   }
 
   static isUserOnline(appId: string): boolean {
@@ -144,18 +188,27 @@ export class PresenceManager {
 
   private static sweepStaleSessions(): void {
     const now = Date.now();
-    const timeoutThreshold = 35000; // 35 seconds without ping
+    const timeoutThreshold = 60000; // 60 seconds grace period
     const apiTimeoutThreshold = 90000; // 90 seconds for API presence
 
     // Sweep socket sessions
     for (const [appId, sessions] of this.userSockets.entries()) {
       for (const [socketId, session] of sessions.entries()) {
-        if (now - session.lastPing > timeoutThreshold) {
-          const socket = this.io?.sockets?.sockets?.get(socketId);
-          if (socket) {
-            socket.disconnect(true);
+        const liveSocket = this.io?.sockets?.sockets?.get(socketId);
+
+        // If the socket is still connected at the transport level, it is live
+        if (liveSocket && liveSocket.connected) {
+          session.lastPing = now;
+          continue;
+        }
+
+        // Only evict if socket is truly disconnected or past timeoutThreshold
+        if (!liveSocket || !liveSocket.connected || now - session.lastPing > timeoutThreshold) {
+          if (liveSocket) {
+            liveSocket.disconnect(true);
           }
           sessions.delete(socketId);
+          this.socketToAppId.delete(socketId);
         }
       }
 

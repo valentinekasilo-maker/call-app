@@ -78,8 +78,11 @@ export class CallManager {
     targetAppId: string,
     callback: (response: { success: boolean; callId?: string; error?: any }) => void
   ): Promise<void> {
+    const cleanCallerId = callerAppId.replace(/\D/g, '');
+    const cleanTargetId = targetAppId.replace(/\D/g, '');
+
     // 1. Validate Target App ID format
-    if (!isValidAppId(targetAppId)) {
+    if (!isValidAppId(cleanTargetId)) {
       callback({
         success: false,
         error: { code: 'INVALID_APP_ID', message: 'The specified 10-digit App ID format is invalid.' },
@@ -88,7 +91,7 @@ export class CallManager {
     }
 
     // 2. Prevent calling self
-    if (callerAppId === targetAppId) {
+    if (cleanCallerId === cleanTargetId) {
       callback({
         success: false,
         error: { code: 'INVALID_APP_ID', message: 'You cannot call your own App ID.' },
@@ -97,7 +100,7 @@ export class CallManager {
     }
 
     // 3. Rate Limit Check
-    if (!this.checkRateLimit(callerAppId)) {
+    if (!this.checkRateLimit(cleanCallerId)) {
       callback({
         success: false,
         error: { code: 'SERVER_ERROR', message: 'Call rate limit exceeded. Please wait a moment.' },
@@ -106,17 +109,21 @@ export class CallManager {
     }
 
     // 4. Verify Target User Exists (async Supabase lookup)
-    const targetUser = await UserRepository.findByAppId(targetAppId);
+    const targetUser = await UserRepository.findByAppId(cleanTargetId);
     if (!targetUser) {
       callback({
         success: false,
-        error: { code: 'USER_NOT_FOUND', message: `No user found with App ID ${targetAppId}.` },
+        error: { code: 'USER_NOT_FOUND', message: `No user found with App ID ${cleanTargetId}.` },
       });
       return;
     }
 
     // 5. Verify Target User is Online
-    if (!PresenceManager.isUserOnline(targetAppId)) {
+    const isOnline = PresenceManager.isUserOnline(cleanTargetId);
+    const receiverSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+    console.log(`[CallManager] CALL ROUTING: caller=${cleanCallerId} target_app_id=${cleanTargetId} isOnline=${isOnline} active_connections=${receiverSockets.length}`);
+
+    if (!isOnline && receiverSockets.length === 0) {
       callback({
         success: false,
         error: { code: 'USER_OFFLINE', message: `${targetUser.name} is currently offline.` },
@@ -125,7 +132,7 @@ export class CallManager {
     }
 
     // 6. Verify Target User is not already In-Call
-    if (PresenceManager.isUserInCall(targetAppId)) {
+    if (PresenceManager.isUserInCall(cleanTargetId)) {
       callback({
         success: false,
         error: { code: 'USER_BUSY', message: `${targetUser.name} is currently on another call.` },
@@ -134,7 +141,7 @@ export class CallManager {
     }
 
     // 7. Verify Caller is not already In-Call
-    if (PresenceManager.isUserInCall(callerAppId)) {
+    if (PresenceManager.isUserInCall(cleanCallerId)) {
       callback({
         success: false,
         error: { code: 'USER_BUSY', message: 'You are already in an active call.' },
@@ -145,7 +152,7 @@ export class CallManager {
     // 8. Create Call Record in Supabase (async)
     let dbCall;
     try {
-      dbCall = await CallRepository.createCall(callerAppId, targetAppId);
+      dbCall = await CallRepository.createCall(cleanCallerId, cleanTargetId);
     } catch (err: any) {
       callback({
         success: false,
@@ -160,15 +167,15 @@ export class CallManager {
       this.handleCallTimeout(callId);
     }, 30000);
 
-    const callerUser = await UserRepository.findByAppId(callerAppId);
+    const callerUser = await UserRepository.findByAppId(cleanCallerId);
 
     const activeCall: ActiveCall = {
       callId,
-      callerAppId,
+      callerAppId: cleanCallerId,
       callerName,
       callerType: (callerUser?.accountType as AccountType) || 'human',
       callerSocketId: callerSocket.id,
-      receiverAppId: targetAppId,
+      receiverAppId: cleanTargetId,
       receiverName: targetUser.name,
       receiverType: (targetUser.accountType as AccountType) || 'human',
       status: 'ringing',
@@ -180,12 +187,11 @@ export class CallManager {
     this.socketToCallId.set(callerSocket.id, callId);
 
     // 10. Notify Receiver Clients via Socket
-    const receiverSockets = PresenceManager.getSocketsForAppId(targetAppId);
     if (this.io) {
       for (const socketId of receiverSockets) {
         this.io.to(socketId).emit('call:incoming', {
           callId,
-          callerAppId,
+          callerAppId: cleanCallerId,
           callerName,
         });
       }
@@ -194,7 +200,7 @@ export class CallManager {
     // 11. Notify Caller that it is ringing
     callerSocket.emit('call:ringing', {
       callId,
-      targetAppId,
+      targetAppId: cleanTargetId,
       targetName: targetUser.name,
     });
 

@@ -62,23 +62,35 @@ export function verifySupabaseToken(token: string): SupabaseJwtClaims {
  */
 export async function resolveTokenToPayload(token: string): Promise<TokenPayload> {
   const admin = getSupabaseAdmin();
-  let userId: string;
-  let userEmail = '';
+  let userId: string = '';
+  let userEmail: string = '';
 
   // 1. Primary verification via official Supabase Auth SDK
-  const { data: authData, error: authError } = await admin.auth.getUser(token);
-  if (authData?.user) {
-    userId = authData.user.id;
-    userEmail = authData.user.email ?? '';
-  } else {
-    // 2. Fallback: verify via JWT secret if configured
-    if (config.supabaseJwtSecret) {
-      const claims = verifySupabaseToken(token);
-      userId = claims.sub;
-      userEmail = claims.email ?? '';
-    } else {
-      throw new Error(`Token verification failed: ${authError?.message ?? 'Invalid token'}`);
+  try {
+    const { data: authData } = await admin.auth.getUser(token);
+    if (authData?.user) {
+      userId = authData.user.id;
+      userEmail = authData.user.email ?? '';
     }
+  } catch (e) {
+    // Fallback to token decoding
+  }
+
+  // 2. Fallback if getUser did not return user
+  if (!userId) {
+    try {
+      const claims = verifySupabaseToken(token);
+      if (claims?.sub) {
+        userId = claims.sub;
+        userEmail = (claims.email as string) ?? '';
+      }
+    } catch (err: any) {
+      throw new Error(`Token verification failed: ${err.message || 'Invalid token'}`);
+    }
+  }
+
+  if (!userId) {
+    throw new Error('Token verification failed: User ID could not be identified');
   }
 
   // 3. Fetch user profile for App ID + Display Name

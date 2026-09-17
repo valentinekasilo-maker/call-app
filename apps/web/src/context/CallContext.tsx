@@ -242,11 +242,19 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
 
     newSocket.on('connect', () => {
       setIsConnected(true);
+      newSocket.emit('presence:ping');
     });
 
     newSocket.on('disconnect', () => {
       setIsConnected(false);
     });
+
+    // Periodic presence ping heartbeat every 15 seconds
+    const heartbeatTimer = setInterval(() => {
+      if (newSocket.connected) {
+        newSocket.emit('presence:ping');
+      }
+    }, 15000);
 
     // Presence update broadcast
     newSocket.on('presence:update', ({ appId, presence }: PresenceUpdatePayload) => {
@@ -465,6 +473,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     setSocket(newSocket);
 
     return () => {
+      clearInterval(heartbeatTimer);
       newSocket.disconnect();
       socketRef.current = null;
       cleanupCallSession();
