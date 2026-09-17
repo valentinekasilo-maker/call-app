@@ -1,13 +1,14 @@
 # ==============================================================================
 # Multi-Stage Dockerfile for Call App (Production on Render / Cloud)
+# Uses Node.js 22 LTS for native WebSocket and Supabase v2 compatibility
 # ==============================================================================
 
 # Stage 1: Build stage
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy root manifest and server/web workspace package manifests
+# Copy root manifest and workspace package manifests
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY packages/shared/package*.json ./packages/shared/
@@ -26,7 +27,7 @@ COPY apps/web ./apps/web
 RUN npm run build:render
 
 # Stage 2: Production runtime image
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
