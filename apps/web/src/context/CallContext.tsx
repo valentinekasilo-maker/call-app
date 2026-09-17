@@ -158,35 +158,47 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     setLocalAudioLevel(0);
   }, []);
 
+  const socketRef = useRef<Socket | null>(null);
+  const activeCallRef = useRef<ActiveCallInfo | null>(null);
+  activeCallRef.current = activeCall;
+
   const acceptCall = useCallback(async () => {
-    if (!socket || !activeCall) return;
+    const s = socketRef.current;
+    const call = activeCallRef.current;
+    if (!s || !call) return;
     CallNotificationManager.clearNotification();
     SoundManager.stopRingtone();
-    socket.emit('call:accept', { callId: activeCall.callId });
-  }, [socket, activeCall]);
+    s.emit('call:accept', { callId: call.callId });
+  }, []);
 
   const rejectCall = useCallback(() => {
-    if (!socket || !activeCall) return;
+    const s = socketRef.current;
+    const call = activeCallRef.current;
+    if (!s || !call) return;
     CallNotificationManager.clearNotification();
     SoundManager.stopRingtone();
-    socket.emit('call:reject', { callId: activeCall.callId, reason: 'declined' });
+    s.emit('call:reject', { callId: call.callId, reason: 'declined' });
     cleanupCallSession();
-  }, [socket, activeCall, cleanupCallSession]);
+  }, [cleanupCallSession]);
 
   const cancelCall = useCallback(() => {
-    if (!socket || !activeCall) return;
+    const s = socketRef.current;
+    const call = activeCallRef.current;
+    if (!s || !call) return;
     CallNotificationManager.clearNotification();
     SoundManager.stopRingback();
-    socket.emit('call:cancel', { callId: activeCall.callId });
+    s.emit('call:cancel', { callId: call.callId });
     cleanupCallSession();
-  }, [socket, activeCall, cleanupCallSession]);
+  }, [cleanupCallSession]);
 
   const endCall = useCallback(() => {
-    if (!socket || !activeCall) return;
+    const s = socketRef.current;
+    const call = activeCallRef.current;
+    if (!s || !call) return;
     CallNotificationManager.clearNotification();
-    socket.emit('call:hangup', { callId: activeCall.callId });
+    s.emit('call:hangup', { callId: call.callId });
     cleanupCallSession();
-  }, [socket, activeCall, cleanupCallSession]);
+  }, [cleanupCallSession]);
 
   const markMissedCallsViewed = useCallback(() => {
     setUnreadMissedCount(0);
@@ -202,7 +214,12 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
   // Socket Connection Management
   useEffect(() => {
     if (!token || !user) {
-      if (socket) socket.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+        setIsConnected(false);
+      }
       return;
     }
 
@@ -449,9 +466,10 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
 
     return () => {
       newSocket.disconnect();
+      socketRef.current = null;
       cleanupCallSession();
     };
-  }, [token, user, deviceType, cleanupCallSession, acceptCall, rejectCall]);
+  }, [token, user?.id, deviceType, cleanupCallSession]);
 
   const initiateCall = async (targetAppId: string) => {
     if (!socket || !isConnected) {
