@@ -27,7 +27,14 @@ export const AuthView: React.FC = () => {
         await register(name, email, password);
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+      const errMsg = err.message || 'Authentication failed';
+      // If login failed due to invalid credentials, switch to Create Account with helpful guidance
+      if (isLogin && (errMsg.toLowerCase().includes('invalid login') || errMsg.toLowerCase().includes('invalid') || errMsg.toLowerCase().includes('not found'))) {
+        setIsLogin(false);
+        setError('Account not found with this email. Switched to Create Account — please enter your Name to get your 10-digit App ID.');
+      } else {
+        setError(errMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -282,6 +289,29 @@ export const AuthView: React.FC = () => {
           >
             {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Get My App ID'}
           </button>
+
+          <div style={{ textAlign: 'center', marginTop: '10px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError(null);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--accent-blue)',
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                textUnderlineOffset: '3px',
+              }}
+            >
+              {isLogin
+                ? "Don't have an account? Create one now"
+                : 'Already have an account? Sign in'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

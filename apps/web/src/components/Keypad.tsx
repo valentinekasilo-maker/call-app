@@ -28,11 +28,13 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
   const [appIdInput, setAppIdInput] = useState<string>('');
   const [lookupUser, setLookupUser] = useState<{ name: string; presence: string } | null>(null);
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
+  const [callNotice, setCallNotice] = useState<string | null>(null);
   const { initiateCall, isConnected } = useCall();
   const { token } = useAuth();
   const backspaceTimerRef = useRef<any>(null);
 
   const handleDigit = useCallback((digit: string) => {
+    setCallNotice(null);
     setAppIdInput(prev => {
       const clean = cleanAppId(prev);
       if (clean.length < 10) {
@@ -43,10 +45,12 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
   }, []);
 
   const handleBackspace = useCallback(() => {
+    setCallNotice(null);
     setAppIdInput(prev => prev.slice(0, -1));
   }, []);
 
   const handleClear = useCallback(() => {
+    setCallNotice(null);
     setAppIdInput('');
     setLookupUser(null);
   }, []);
@@ -66,10 +70,7 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
       } else if (e.key === 'Backspace') {
         handleBackspace();
       } else if (e.key === 'Enter') {
-        const raw = cleanAppId(appIdInput);
-        if (raw.length === 10 && isConnected) {
-          initiateCall(raw);
-        }
+        handleCall();
       }
     };
 
@@ -86,6 +87,7 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
       const pastedText = e.clipboardData?.getData('text') || '';
       const digitsOnly = cleanAppId(pastedText);
       if (digitsOnly.length > 0) {
+        setCallNotice(null);
         setAppIdInput(digitsOnly.slice(0, 10));
       }
     };
@@ -120,9 +122,22 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
 
   const handleCall = () => {
     const raw = cleanAppId(appIdInput);
-    if (raw.length === 10 && isConnected) {
-      initiateCall(raw);
+    if (raw.length === 0) {
+      setCallNotice('Enter a 10-digit App ID to place call');
+      setTimeout(() => setCallNotice(null), 3000);
+      return;
     }
+    if (raw.length < 10) {
+      const remaining = 10 - raw.length;
+      setCallNotice(`Enter full 10 digits (need ${remaining} more)`);
+      setTimeout(() => setCallNotice(null), 3000);
+      return;
+    }
+    if (!isConnected) {
+      setCallNotice('Connecting to network... calling now');
+      setTimeout(() => setCallNotice(null), 3000);
+    }
+    initiateCall(raw);
   };
 
   const handleCopyInput = () => {
@@ -139,6 +154,7 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
       const text = await navigator.clipboard.readText();
       const digits = cleanAppId(text);
       if (digits.length > 0) {
+        setCallNotice(null);
         setAppIdInput(digits.slice(0, 10));
       }
     } catch {
@@ -147,7 +163,6 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
   };
 
   const rawLength = cleanAppId(appIdInput).length;
-  const isCallReady = rawLength === 10 && isConnected;
 
   return (
     <div
@@ -252,7 +267,26 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
           </button>
         ) : null}
 
-        {copiedNotification && (
+        {callNotice ? (
+          <span
+            style={{
+              position: 'absolute',
+              bottom: '-22px',
+              fontSize: '0.78rem',
+              color: 'var(--accent-call)',
+              backgroundColor: 'var(--bg-surface-subtle)',
+              padding: '2px 10px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-glass-subtle)',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            {callNotice}
+          </span>
+        ) : copiedNotification ? (
           <span
             style={{
               position: 'absolute',
@@ -266,7 +300,7 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
           >
             <Check size={12} /> Copied to clipboard
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* ── iOS 3×4 Circular Keypad Matrix ──────────────────────── */}
@@ -308,9 +342,13 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
         {/* Centered Circular Call Button */}
         <button
           onClick={handleCall}
-          disabled={!isCallReady}
           className="ios-call-button"
-          title={isCallReady ? 'Call' : 'Enter 10-digit App ID to call'}
+          title="Call (10-digit App ID)"
+          style={{
+            transform: rawLength === 10 ? 'scale(1.05)' : 'scale(1)',
+            opacity: rawLength === 10 ? 1 : 0.9,
+            cursor: 'pointer',
+          }}
         >
           <Phone size={32} fill="currentColor" />
         </button>
