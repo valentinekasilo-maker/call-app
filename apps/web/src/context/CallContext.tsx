@@ -61,6 +61,7 @@ interface CallContextType {
   markMissedCallsViewed: () => void;
   queryPresence: (appIds: string[]) => void;
   requestNotificationPermission: () => Promise<NotificationPermission>;
+  requestMicrophonePermission: () => Promise<boolean>;
 }
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
@@ -120,15 +121,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     };
   }, [selectedInputId, selectedOutputId]);
 
-  // Request browser notification permission automatically on initial authenticated load
-  useEffect(() => {
-    if (user && typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        // Prompt once non-intrusively
-        Notification.requestPermission().catch(() => {});
-      }
-    }
-  }, [user]);
+  // Notification permission is requested on user demand or settings, not on page load
 
   const cleanupCallSession = useCallback(() => {
     incomingCallIdRef.current = null;
@@ -165,16 +158,23 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
   const acceptCall = useCallback(async () => {
     const s = socketRef.current;
     const call = activeCallRef.current;
-    if (!s || !call) return;
+    if (!s || !call) {
+      console.warn('[CallContext] acceptCall missing socket or active call', { hasSocket: !!s, call });
+      return;
+    }
     CallNotificationManager.clearNotification();
     SoundManager.stopRingtone();
+    SoundManager.unlockAudio();
     s.emit('call:accept', { callId: call.callId });
   }, []);
 
   const rejectCall = useCallback(() => {
     const s = socketRef.current;
     const call = activeCallRef.current;
-    if (!s || !call) return;
+    if (!s || !call) {
+      console.warn('[CallContext] rejectCall missing socket or active call', { hasSocket: !!s, call });
+      return;
+    }
     CallNotificationManager.clearNotification();
     SoundManager.stopRingtone();
     s.emit('call:reject', { callId: call.callId, reason: 'declined' });
@@ -184,7 +184,10 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
   const cancelCall = useCallback(() => {
     const s = socketRef.current;
     const call = activeCallRef.current;
-    if (!s || !call) return;
+    if (!s || !call) {
+      console.warn('[CallContext] cancelCall missing socket or active call', { hasSocket: !!s, call });
+      return;
+    }
     CallNotificationManager.clearNotification();
     SoundManager.stopRingback();
     s.emit('call:cancel', { callId: call.callId });
@@ -210,6 +213,24 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
   const requestNotificationPermission = useCallback(async () => {
     return await CallNotificationManager.requestPermission();
   }, []);
+
+  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) return false;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter(d => d.kind === 'audioinput');
+      const outputs = devices.filter(d => d.kind === 'audiooutput');
+      setAvailableInputs(inputs);
+      setAvailableOutputs(outputs);
+      if (inputs.length > 0 && !selectedInputId) setSelectedInputId(inputs[0].deviceId);
+      return true;
+    } catch (e) {
+      console.warn('Microphone permission request failed:', e);
+      return false;
+    }
+  }, [selectedInputId]);
 
   // Socket Connection Management
   useEffect(() => {
@@ -239,6 +260,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     const newSocket = signalingServerUrl
       ? io(signalingServerUrl, socketOptions)
       : io(socketOptions);
+    socketRef.current = newSocket;
 
     newSocket.on('connect', () => {
       setIsConnected(true);
@@ -269,15 +291,17 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
       if (incomingCallIdRef.current === payload.callId) return;
       incomingCallIdRef.current = payload.callId;
 
-      setCallState('incoming_ringing');
-      setActiveCall({
+      const incomingInfo: ActiveCallInfo = {
         callId: payload.callId,
         remoteAppId: payload.callerAppId,
         remoteName: payload.callerName,
         isIncoming: true,
         duration: 0,
         connectionState: 'new',
-      });
+      };
+      activeCallRef.current = incomingInfo;
+      setCallState('incoming_ringing');
+      setActiveCall(incomingInfo);
 
       // Start ringing audio loop
       SoundManager.playRingtone();
@@ -315,18 +339,23 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     // ──────────────────────────────────────────────────────────────
     newSocket.on('call:accepted', async (payload: CallAcceptedPayload) => {
       CallNotificationManager.clearNotification();
+      SoundManager.stopRingback();
+      SoundManager.stopRingtone();
       SoundManager.playConnectedSound();
       setCallState('active_call');
-      setActiveCall(prev =>
-        prev
-          ? {
-              ...prev,
-              remoteName: payload.receiverName || prev.remoteName,
-              startedAt: Date.now(),
-              connectionState: 'connecting',
-            }
-          : null
-      );
+
+      const currentCall = activeCallRef.current;
+      const updatedCall: ActiveCallInfo = {
+        callId: payload.callId,
+        remoteAppId: currentCall?.remoteAppId || '',
+        remoteName: payload.receiverName || currentCall?.remoteName || '',
+        isIncoming: currentCall ? currentCall.isIncoming : false,
+        duration: 0,
+        startedAt: Date.now(),
+        connectionState: 'connecting',
+      };
+      activeCallRef.current = updatedCall;
+      setActiveCall(updatedCall);
 
       // Start duration counter
       if (durationTimerRef.current) clearInterval(durationTimerRef.current);
@@ -362,7 +391,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         await session.initLocalStream(selectedInputId);
 
         // Caller creates initial offer
-        if (activeCall && !activeCall.isIncoming) {
+        if (currentCall && !currentCall.isIncoming) {
           const offer = await session.createOffer();
           newSocket.emit('webrtc:offer', { callId: payload.callId, sdp: offer });
         }
@@ -491,15 +520,19 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
       return;
     }
 
-    setCallState('outgoing_ringing');
-    setActiveCall({
+    SoundManager.unlockAudio();
+
+    const outgoingInfo: ActiveCallInfo = {
       callId: '',
       remoteAppId: targetAppId,
       remoteName: 'Calling...',
       isIncoming: false,
       duration: 0,
       connectionState: 'new',
-    });
+    };
+    activeCallRef.current = outgoingInfo;
+    setCallState('outgoing_ringing');
+    setActiveCall(outgoingInfo);
 
     SoundManager.playRingback();
 
@@ -509,6 +542,9 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         setErrorMessage(res.error?.message || 'Call failed.');
         cleanupCallSession();
       } else {
+        if (activeCallRef.current) {
+          activeCallRef.current.callId = res.callId;
+        }
         setActiveCall(prev => (prev ? { ...prev, callId: res.callId } : null));
       }
     });
@@ -564,6 +600,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         markMissedCallsViewed,
         queryPresence,
         requestNotificationPermission,
+        requestMicrophonePermission,
       }}
     >
       {children}

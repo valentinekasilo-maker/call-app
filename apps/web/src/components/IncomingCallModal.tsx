@@ -90,14 +90,34 @@ export const IncomingCallModal: React.FC = () => {
           width: '100%',
           maxWidth: '340px',
           padding: '0 1rem',
+          position: 'relative',
+          zIndex: 100,
+          pointerEvents: 'auto',
         }}
       >
         {/* Decline Button */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            rejectCall();
+          }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', pointerEvents: 'auto' }}
+        >
           <button
-            onClick={rejectCall}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              rejectCall();
+            }}
             className="ios-hangup-button"
             title="Decline"
+            style={{
+              cursor: 'pointer',
+              pointerEvents: 'auto',
+              border: 'none',
+              position: 'relative',
+              zIndex: 101,
+            }}
           >
             <PhoneOff size={32} />
           </button>
@@ -107,11 +127,28 @@ export const IncomingCallModal: React.FC = () => {
         </div>
 
         {/* Accept Button */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            acceptCall();
+          }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', pointerEvents: 'auto' }}
+        >
           <button
-            onClick={acceptCall}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              acceptCall();
+            }}
             className="ios-call-button"
             title="Accept"
+            style={{
+              cursor: 'pointer',
+              pointerEvents: 'auto',
+              border: 'none',
+              position: 'relative',
+              zIndex: 101,
+            }}
           >
             <Phone size={32} fill="currentColor" />
           </button>

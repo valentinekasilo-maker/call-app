@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, Notification, session } from 'electron';
 import path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
@@ -180,6 +180,21 @@ ipcMain.on('popup-reject-call', (_event, payload) => {
 });
 
 app.whenReady().then(() => {
+  // Configure desktop permission handler for Microphone and Notifications
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media' || permission === 'notifications') {
+      return callback(true);
+    }
+    callback(false);
+  });
+
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+    if (permission === 'media' || permission === 'notifications') {
+      return true;
+    }
+    return false;
+  });
+
   createMainWindow();
   createTray();
 

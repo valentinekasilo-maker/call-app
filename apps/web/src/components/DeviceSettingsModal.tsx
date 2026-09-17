@@ -14,6 +14,8 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
     selectedOutputId,
     setSelectedInputId,
     setSelectedOutputId,
+    requestNotificationPermission,
+    requestMicrophonePermission,
   } = useCall();
   const { theme, setTheme } = useTheme();
 
@@ -174,6 +176,115 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
                 ))
               )}
             </select>
+          </div>
+
+          {/* ── Permissions Section ──────────────────────────────── */}
+          <div>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.78rem',
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                marginBottom: '8px',
+              }}
+            >
+              <Shield size={14} color="var(--accent-call)" />
+              Permissions
+            </label>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Microphone Permission */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-surface-subtle)',
+                  border: '1px solid var(--border-glass-subtle)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Mic size={15} color="var(--accent-call)" />
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Microphone Access
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const granted = await requestMicrophonePermission();
+                    if (granted) {
+                      alert('Microphone access enabled successfully.');
+                    } else {
+                      alert('Please allow microphone permissions in your browser or OS settings.');
+                    }
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                    color: 'var(--accent-call)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {availableInputs.length > 0 && availableInputs[0].label ? 'Granted' : 'Grant / Test'}
+                </button>
+              </div>
+
+              {/* Notification Permission */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-surface-subtle)',
+                  border: '1px solid var(--border-glass-subtle)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Volume2 size={15} color="var(--accent-blue)" />
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Call Notifications
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await requestNotificationPermission();
+                    if (res === 'granted') {
+                      alert('Notifications enabled.');
+                    } else {
+                      alert('Notification permission: ' + res);
+                    }
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                    color: 'var(--accent-blue)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                    ? 'Enabled'
+                    : 'Enable'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

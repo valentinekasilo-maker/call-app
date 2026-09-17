@@ -83,11 +83,28 @@ export const OutgoingCallModal: React.FC = () => {
       </div>
 
       {/* ── Cancel Button ────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          cancelCall();
+        }}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', position: 'relative', zIndex: 100, pointerEvents: 'auto' }}
+      >
         <button
-          onClick={cancelCall}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            cancelCall();
+          }}
           className="ios-hangup-button"
           title="Cancel"
+          style={{
+            cursor: 'pointer',
+            pointerEvents: 'auto',
+            border: 'none',
+            position: 'relative',
+            zIndex: 101,
+          }}
         >
           <PhoneOff size={32} />
         </button>

@@ -70,6 +70,16 @@ export class SoundManager {
   }
 
   /**
+   * Explicitly resume/unlock the Web Audio context during a user gesture (e.g. Accept/Call click).
+   */
+  static unlockAudio(): void {
+    const ctx = this.getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+  }
+
+  /**
    * Set master sound volume (0.0 to 1.0).
    */
   static setVolume(level: number): void {
