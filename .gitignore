@@ -14,11 +14,11 @@ data/
 
 # Environment Variables & Secrets (CRITICAL)
 .env
-.env.local
-.env.*.local
-apps/*/.env
-apps/*/.env.local
-packages/*/.env
+.env*
+!.env.example
+apps/*/.env*
+!apps/*/.env.example
+packages/*/.env*
 
 # Logs
 logs
