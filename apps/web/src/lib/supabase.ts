@@ -2,7 +2,7 @@
  * Supabase Client — Frontend (Browser) only
  *
  * Uses ONLY the public/anon key (VITE_SUPABASE_PUBLISHABLE_KEY).
- * Row Level Security enforces data access on the Supabase side.
+ * Supports build-time Vite env, server-injected window.__APP_CONFIG__, and public project defaults.
  *
  * This file must NEVER import or use:
  *   - SUPABASE_SERVICE_ROLE_KEY
@@ -10,19 +10,19 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const winConfig = typeof window !== 'undefined' ? (window as any).__APP_CONFIG__ : null;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    '[Supabase] Missing environment variables.\n' +
-    'Create apps/web/.env with:\n' +
-    '  VITE_SUPABASE_URL=...\n' +
-    '  VITE_SUPABASE_PUBLISHABLE_KEY=...'
-  );
-}
+const supabaseUrl =
+  winConfig?.supabaseUrl ||
+  import.meta.env.VITE_SUPABASE_URL ||
+  'https://lptsuupxamkbsltbbzaj.supabase.co';
 
-export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
+const supabaseAnonKey =
+  winConfig?.supabaseAnonKey ||
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  'sb_publishable_zeQ-yD7h0akTUEZfCjlFDQ_K2tKuX1U';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // Use localStorage to persist session across browser refreshes
     persistSession: true,

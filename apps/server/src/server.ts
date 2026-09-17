@@ -39,6 +39,18 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Client runtime configuration endpoint (Safe public configuration)
+app.get('/api/config', (req, res) => {
+  res.json({
+    supabaseUrl: config.supabaseUrl || 'https://lptsuupxamkbsltbbzaj.supabase.co',
+    supabaseAnonKey:
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      'sb_publishable_zeQ-yD7h0akTUEZfCjlFDQ_K2tKuX1U',
+    stunServers: config.stunServers,
+  });
+});
+
 // Existing REST Routes (Backwards Compatibility)
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -60,14 +72,35 @@ const webDistCandidates = [
 const webDistPath = webDistCandidates.find(candidate => fs.existsSync(candidate));
 if (webDistPath) {
   console.log(`📦 Serving static web client from: ${webDistPath}`);
-  app.use(express.static(webDistPath));
+  
+  const serveIndexHtml = (req: express.Request, res: express.Response) => {
+    try {
+      let html = fs.readFileSync(path.join(webDistPath, 'index.html'), 'utf-8');
+      const runtimeConfig = {
+        supabaseUrl: config.supabaseUrl || 'https://lptsuupxamkbsltbbzaj.supabase.co',
+        supabaseAnonKey:
+          process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+          process.env.SUPABASE_PUBLISHABLE_KEY ||
+          'sb_publishable_zeQ-yD7h0akTUEZfCjlFDQ_K2tKuX1U',
+      };
+      const injectedScript = `<script>window.__APP_CONFIG__ = ${JSON.stringify(runtimeConfig)};</script>`;
+      html = html.replace('</head>', `${injectedScript}</head>`);
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+    } catch (e) {
+      res.sendFile(path.join(webDistPath, 'index.html'));
+    }
+  };
+
+  app.use(express.static(webDistPath, { index: false }));
+  app.get('/', serveIndexHtml);
   
   // SPA Fallback for client-side routing
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
       return next();
     }
-    res.sendFile(path.join(webDistPath, 'index.html'));
+    serveIndexHtml(req, res);
   });
 }
 
