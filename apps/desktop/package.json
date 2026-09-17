@@ -1,0 +1,43 @@
+{
+  "name": "callapp-desktop",
+  "version": "1.0.0",
+  "description": "Internet-Based Calling App Desktop Client",
+  "author": "Valence",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "pack": "tsc && vite build && electron-builder --dir",
+    "start": "electron .",
+    "test": "echo No desktop tests"
+  },
+  "build": {
+    "appId": "com.callapp.desktop",
+    "productName": "CallApp",
+    "electronVersion": "30.5.1",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": ["dir"]
+    }
+  },
+  "dependencies": {
+    "@callapp/shared": "*",
+    "lucide-react": "^0.395.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.13",
+    "vite-plugin-electron": "^0.28.6",
+    "vite-plugin-electron-renderer": "^0.14.5"
+  }
+}

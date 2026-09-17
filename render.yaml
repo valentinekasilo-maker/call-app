@@ -1,0 +1,33 @@
+# Render Blueprint Specification for Call App
+# Documentation: https://render.com/docs/blueprint-spec
+
+services:
+  # -------------------------------------------------------------
+  # Unified All-in-One Web Service (Signaling + REST API + Web UI)
+  # -------------------------------------------------------------
+  - type: web
+    name: callapp
+    runtime: node
+    plan: starter
+    region: oregon # or frankfurt, ohio, singapore
+    buildCommand: npm install && npm run build:render
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: STUN_SERVERS
+        value: stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302

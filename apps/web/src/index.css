@@ -1,0 +1,419 @@
+/* ============================================================
+   iOS 26 Liquid Glass Design System — CallApp
+   Pure White Light Mode (#FFFFFF) & Pure OLED Black Dark Mode (#000000)
+   ============================================================ */
+
+/* ── Base Variables (Dark Mode Default) ────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --bg-app: #000000;
+  --bg-chassis: #000000;
+  --bg-surface: rgba(28, 28, 30, 0.75);
+  --bg-surface-elevated: rgba(44, 44, 46, 0.85);
+  --bg-surface-subtle: rgba(255, 255, 255, 0.06);
+  --bg-surface-hover: rgba(255, 255, 255, 0.12);
+  
+  --border-glass: rgba(255, 255, 255, 0.12);
+  --border-glass-subtle: rgba(255, 255, 255, 0.06);
+  --border-separator: rgba(255, 255, 255, 0.08);
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #EBEBF5;
+  --text-muted: #8E8E93;
+  --text-tertiary: #636366;
+  --text-dim: #48484A;
+
+  --keypad-btn-bg: rgba(255, 255, 255, 0.12);
+  --keypad-btn-bg-active: rgba(255, 255, 255, 0.28);
+  --keypad-btn-text: #FFFFFF;
+  --keypad-subtext: #8E8E93;
+
+  --nav-bar-bg: rgba(20, 20, 22, 0.82);
+  --nav-bar-border: rgba(255, 255, 255, 0.12);
+  --nav-tab-active: #0A84FF;
+  --nav-tab-inactive: #8E8E93;
+
+  --modal-bg: rgba(28, 28, 30, 0.94);
+  --modal-backdrop: rgba(0, 0, 0, 0.75);
+
+  --shadow-glass: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.15);
+  --shadow-chassis: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.08);
+
+  --accent-call: #30D158;
+  --accent-call-hover: #28B84C;
+  --accent-hangup: #FF453A;
+  --accent-hangup-hover: #E0382E;
+  --accent-blue: #0A84FF;
+  --accent-amber: #FFD60A;
+
+  --badge-bg: rgba(48, 209, 88, 0.15);
+  --badge-text: #30D158;
+}
+
+/* ── Light Mode (Genuinely Pure White #FFFFFF) ──────────────────── */
+[data-theme="light"] {
+  --bg-app: #FFFFFF;
+  --bg-chassis: #FFFFFF;
+  --bg-surface: rgba(242, 242, 247, 0.82);
+  --bg-surface-elevated: rgba(255, 255, 255, 0.95);
+  --bg-surface-subtle: rgba(0, 0, 0, 0.04);
+  --bg-surface-hover: rgba(0, 0, 0, 0.08);
+  
+  --border-glass: rgba(0, 0, 0, 0.08);
+  --border-glass-subtle: rgba(0, 0, 0, 0.04);
+  --border-separator: rgba(60, 60, 67, 0.12);
+
+  --text-primary: #000000;
+  --text-secondary: #1C1C1E;
+  --text-muted: #636366;
+  --text-tertiary: #8E8E93;
+  --text-dim: #AEAEB2;
+
+  --keypad-btn-bg: rgba(0, 0, 0, 0.05);
+  --keypad-btn-bg-active: rgba(0, 0, 0, 0.15);
+  --keypad-btn-text: #000000;
+  --keypad-subtext: #8E8E93;
+
+  --nav-bar-bg: rgba(255, 255, 255, 0.85);
+  --nav-bar-border: rgba(0, 0, 0, 0.08);
+  --nav-tab-active: #007AFF;
+  --nav-tab-inactive: #8E8E93;
+
+  --modal-bg: rgba(255, 255, 255, 0.96);
+  --modal-backdrop: rgba(0, 0, 0, 0.35);
+
+  --shadow-glass: 0 12px 32px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.12);
+  --shadow-chassis: 0 20px 60px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  --accent-call: #34C759;
+  --accent-call-hover: #2DB14E;
+  --accent-hangup: #FF3B30;
+  --accent-hangup-hover: #E03126;
+  --accent-blue: #007AFF;
+  --accent-amber: #FF9500;
+
+  --badge-bg: rgba(52, 199, 89, 0.12);
+  --badge-text: #2DB14E;
+}
+
+/* ── Typography & Global Reset ─────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Inter", Roboto, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+  user-select: none;
+  transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease, background-color 0.18s ease;
+}
+
+button:active {
+  transform: scale(0.94);
+}
+
+input, select, textarea {
+  font-family: inherit;
+  outline: none;
+  border: none;
+}
+
+/* ── Liquid Glass Utility Classes ───────────────────────────────── */
+.liquid-glass {
+  background: var(--bg-surface);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+}
+
+.liquid-glass-elevated {
+  background: var(--bg-surface-elevated);
+  backdrop-filter: blur(32px) saturate(190%);
+  -webkit-backdrop-filter: blur(32px) saturate(190%);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+}
+
+.liquid-glass-subtle {
+  background: var(--bg-surface-subtle);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass-subtle);
+}
+
+/* ── Keypad Button Physics ──────────────────────────────────────── */
+.ios-keypad-btn {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background-color: var(--keypad-btn-bg);
+  color: var(--keypad-btn-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.12s ease, transform 0.1s cubic-bezier(0.2, 0, 0, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.ios-keypad-btn:hover {
+  background-color: var(--keypad-btn-bg-active);
+}
+
+.ios-keypad-btn:active {
+  background-color: var(--keypad-btn-bg-active);
+  transform: scale(0.92);
+}
+
+.ios-keypad-digit {
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.ios-keypad-letters {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--keypad-subtext);
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+/* ── iOS Green Call Button ──────────────────────────────────────── */
+.ios-call-button {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--accent-call);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(52, 199, 89, 0.35);
+  transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1), background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ios-call-button:hover {
+  background: var(--accent-call-hover);
+  box-shadow: 0 10px 28px rgba(52, 199, 89, 0.45);
+}
+
+.ios-call-button:active {
+  transform: scale(0.92);
+}
+
+.ios-call-button:disabled {
+  background: var(--bg-surface-subtle);
+  color: var(--text-tertiary);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── iOS Red Hangup Button ──────────────────────────────────────── */
+.ios-hangup-button {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--accent-hangup);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(255, 59, 48, 0.35);
+  transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1), background-color 0.15s ease;
+}
+
+.ios-hangup-button:hover {
+  background: var(--accent-hangup-hover);
+}
+
+.ios-hangup-button:active {
+  transform: scale(0.92);
+}
+
+/* ── iOS In-Call Control Circle ─────────────────────────────────── */
+.ios-call-ctrl-btn {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: var(--bg-surface-subtle);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-glass-subtle);
+  transition: all 0.15s ease;
+}
+
+.ios-call-ctrl-btn:hover {
+  background: var(--bg-surface-hover);
+}
+
+.ios-call-ctrl-btn:active {
+  transform: scale(0.92);
+}
+
+.ios-call-ctrl-btn.active {
+  background: #FFFFFF;
+  color: #000000;
+  border-color: #FFFFFF;
+}
+
+/* ── Segmented Control Pill ─────────────────────────────────────── */
+.ios-segmented-control {
+  display: flex;
+  background: var(--bg-surface-subtle);
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass-subtle);
+}
+
+.ios-segmented-tab {
+  flex: 1;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.ios-segmented-tab.active {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Presence & Status Dots ─────────────────────────────────────── */
+.presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.presence-online {
+  background-color: var(--accent-call);
+  box-shadow: 0 0 6px rgba(52, 199, 89, 0.6);
+}
+
+.presence-in_call {
+  background-color: var(--accent-amber);
+  box-shadow: 0 0 6px rgba(255, 149, 0, 0.6);
+}
+
+.presence-offline {
+  background-color: var(--text-dim);
+}
+
+/* ── Animations ─────────────────────────────────────────────────── */
+@keyframes ios-pulse-ring {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.6);
+  }
+  70% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 20px rgba(52, 199, 89, 0);
+  }
+  100% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(52, 199, 89, 0);
+  }
+}
+
+@keyframes ios-pulse-outgoing {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.6);
+  }
+  70% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 24px rgba(10, 132, 255, 0);
+  }
+  100% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(10, 132, 255, 0);
+  }
+}
+
+@keyframes ios-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ios-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-pulse-incoming {
+  animation: ios-pulse-ring 1.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.animate-pulse-outgoing {
+  animation: ios-pulse-outgoing 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.animate-slide-up {
+  animation: ios-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: ios-fade-in 0.2s ease forwards;
+}
+
+/* ── Custom Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-glass);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}

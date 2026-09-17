@@ -1,0 +1,23 @@
+{
+  "name": "call-app-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "npm --workspace=@callapp/server start",
+    "build:render": "npm --workspace=@callapp/shared run build && npm --workspace=@callapp/web run build && npm --workspace=@callapp/server run build",
+    "build:server": "npm --workspace=@callapp/shared run build && npm --workspace=@callapp/server run build",
+    "build:web": "npm --workspace=@callapp/shared run build && npm --workspace=@callapp/web run build",
+    "dev:server": "npm --workspace=@callapp/server run dev",
+    "dev:web": "npm --workspace=@callapp/web run dev",
+    "dev:desktop": "npm --workspace=callapp-desktop run dev",
+    "build": "npm --workspaces run build",
+    "test": "npm --workspaces run test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0"
+  }
+}
