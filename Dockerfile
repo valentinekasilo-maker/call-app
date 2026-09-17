@@ -7,17 +7,21 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root manifest and lockfile
+# Copy root manifest and workspace package files
 COPY package*.json ./
+COPY tsconfig*.json ./
 COPY packages/shared/package*.json ./packages/shared/
 COPY apps/server/package*.json ./apps/server/
 COPY apps/web/package*.json ./apps/web/
+COPY apps/desktop/package*.json ./apps/desktop/
 
-# Install dependencies (skips dev dependencies of desktop)
+# Avoid downloading electron binaries in container build
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+
+# Install dependencies
 RUN npm install
 
 # Copy source code
-COPY tsconfig.json ./
 COPY packages/shared ./packages/shared
 COPY apps/server ./apps/server
 COPY apps/web ./apps/web
@@ -33,13 +37,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=10000
 
-# Copy root manifests
+# Copy root manifests and server workspace package
 COPY package*.json ./
 COPY packages/shared/package*.json ./packages/shared/
 COPY apps/server/package*.json ./apps/server/
 
 # Install only production dependencies
-RUN npm install --omit=dev
+RUN npm install --omit=dev --workspace=@callapp/server --workspace=@callapp/shared
 
 # Copy compiled artifacts from builder stage
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
