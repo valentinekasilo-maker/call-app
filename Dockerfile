@@ -7,19 +7,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root manifest and workspace package files
+# Copy root manifest and server/web workspace package manifests
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY packages/shared/package*.json ./packages/shared/
 COPY apps/server/package*.json ./apps/server/
 COPY apps/web/package*.json ./apps/web/
-COPY apps/desktop/package*.json ./apps/desktop/
 
-# Avoid downloading electron binaries in container build
-ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
-
-# Install dependencies
-RUN npm install
+# Install dependencies for shared, server, and web
+RUN npm install --workspace=@callapp/shared --workspace=@callapp/server --workspace=@callapp/web
 
 # Copy source code
 COPY packages/shared ./packages/shared
