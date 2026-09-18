@@ -10,6 +10,7 @@ export type CallConnectionState =
   | 'closed';
 
 export interface WebRTCCallSessionEvents {
+  onLocalStream?: (stream: MediaStream) => void;
   onRemoteStream?: (stream: MediaStream) => void;
   onConnectionStateChange?: (state: CallConnectionState) => void;
   onIceCandidate?: (candidate: RTCIceCandidateInit) => void;
@@ -27,6 +28,8 @@ export class WebRTCCallSession {
   private audioAnalyser: AnalyserNode | null = null;
   private audioLevelInterval: any = null;
   private isMuted = false;
+  private isVideoMuted = false;
+  private isVideoCall = false;
   private events: WebRTCCallSessionEvents = {};
 
   constructor(
@@ -37,9 +40,14 @@ export class WebRTCCallSession {
   }
 
   /**
-   * Initializes local microphone audio and peer connection
+   * Initializes local microphone and optional camera stream
    */
-  async initLocalStream(audioDeviceId?: string): Promise<MediaStream> {
+  async initLocalStream(
+    audioDeviceId?: string,
+    videoDeviceId?: string,
+    isVideo: boolean = false
+  ): Promise<MediaStream> {
+    this.isVideoCall = isVideo;
     const constraints: MediaStreamConstraints = {
       audio: {
         deviceId: audioDeviceId ? { exact: audioDeviceId } : undefined,
@@ -47,14 +55,40 @@ export class WebRTCCallSession {
         noiseSuppression: true,
         autoGainControl: true,
       },
-      video: false,
+      video: isVideo
+        ? {
+            deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            facingMode: 'user',
+          }
+        : false,
     };
 
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
       this.setupAudioAnalyser(this.localStream);
+      this.events.onLocalStream?.(this.localStream);
       return this.localStream;
     } catch (err: any) {
+      // Fallback: if video fails (e.g. no camera attached), try audio-only
+      if (isVideo) {
+        console.warn('Camera access failed, falling back to audio-only stream:', err);
+        try {
+          this.localStream = await navigator.mediaDevices.getUserMedia({
+            audio: constraints.audio,
+            video: false,
+          });
+          this.setupAudioAnalyser(this.localStream);
+          this.events.onLocalStream?.(this.localStream);
+          return this.localStream;
+        } catch (audioErr: any) {
+          const error = new Error(`Failed to access media devices: ${audioErr.message}`);
+          this.events.onError?.(error);
+          throw error;
+        }
+      }
+
       const error = new Error(`Failed to access microphone: ${err.message}`);
       this.events.onError?.(error);
       throw error;
@@ -62,7 +96,7 @@ export class WebRTCCallSession {
   }
 
   /**
-   * Creates the RTCPeerConnection and attaches local audio tracks
+   * Creates the RTCPeerConnection and attaches local media tracks
    */
   createPeerConnection(): RTCPeerConnection {
     const rtcConfig: RTCConfiguration = {
@@ -76,17 +110,23 @@ export class WebRTCCallSession {
     this.remoteDescriptionSet = false;
     this.iceCandidateBuffer = [];
 
-    // Attach local audio tracks
+    // Attach local audio & video tracks
     if (this.localStream) {
-      this.localStream.getAudioTracks().forEach(track => {
+      this.localStream.getTracks().forEach(track => {
         this.peerConnection?.addTrack(track, this.localStream!);
       });
     }
 
-    // Handle incoming remote audio tracks
+    // Handle incoming remote media tracks
     this.peerConnection.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
         this.remoteStream = event.streams[0];
+        this.events.onRemoteStream?.(this.remoteStream);
+      } else {
+        if (!this.remoteStream) {
+          this.remoteStream = new MediaStream();
+        }
+        this.remoteStream.addTrack(event.track);
         this.events.onRemoteStream?.(this.remoteStream);
       }
     };
@@ -126,7 +166,7 @@ export class WebRTCCallSession {
 
     const offer = await this.peerConnection!.createOffer({
       offerToReceiveAudio: true,
-      offerToReceiveVideo: false,
+      offerToReceiveVideo: true,
     });
 
     await this.peerConnection!.setLocalDescription(offer);
@@ -207,6 +247,68 @@ export class WebRTCCallSession {
   }
 
   /**
+   * Toggles camera video mute
+   */
+  setVideoMuted(muted: boolean): boolean {
+    this.isVideoMuted = muted;
+    if (this.localStream) {
+      this.localStream.getVideoTracks().forEach(track => {
+        track.enabled = !muted;
+      });
+    }
+    return this.isVideoMuted;
+  }
+
+  getIsVideoMuted(): boolean {
+    return this.isVideoMuted;
+  }
+
+  /**
+   * Switch to a different video camera device
+   */
+  async switchCamera(videoDeviceId: string): Promise<MediaStream | null> {
+    if (!navigator.mediaDevices?.getUserMedia) return null;
+
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: videoDeviceId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
+
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) return null;
+
+      // Replace video track in localStream
+      if (this.localStream) {
+        const oldTracks = this.localStream.getVideoTracks();
+        oldTracks.forEach(t => {
+          this.localStream?.removeTrack(t);
+          t.stop();
+        });
+        this.localStream.addTrack(newVideoTrack);
+      }
+
+      // Replace track on RTCPeerConnection sender
+      if (this.peerConnection) {
+        const senders = this.peerConnection.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(newVideoTrack);
+        }
+      }
+
+      this.events.onLocalStream?.(this.localStream!);
+      return this.localStream;
+    } catch (e) {
+      console.warn('Failed to switch camera:', e);
+      return null;
+    }
+  }
+
+  /**
    * Audio Level Visualizer setup
    */
   private setupAudioAnalyser(stream: MediaStream): void {
@@ -243,7 +345,7 @@ export class WebRTCCallSession {
   }
 
   /**
-   * Clean up all audio tracks, intervals, and peer connection
+   * Clean up all media tracks, intervals, and peer connection
    */
   close(): void {
     if (this.audioLevelInterval) {

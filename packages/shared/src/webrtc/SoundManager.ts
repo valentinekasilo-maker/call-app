@@ -276,6 +276,113 @@ export class SoundManager {
   }
 
   /**
+   * Dual-Tone Multi-Frequency (DTMF) standard telephone dialing frequency matrix
+   */
+  private static readonly DTMF_FREQUENCIES: Record<string, [number, number]> = {
+    '1': [697, 1209],
+    '2': [697, 1336],
+    '3': [697, 1477],
+    '4': [770, 1209],
+    '5': [770, 1336],
+    '6': [770, 1477],
+    '7': [852, 1209],
+    '8': [852, 1336],
+    '9': [852, 1477],
+    '*': [941, 1209],
+    '0': [941, 1336],
+    '#': [941, 1477],
+  };
+
+  /**
+   * Plays realistic telephone DTMF keypad dialing tone when typing numbers
+   */
+  static playDTMFTone(digit: string, duration = 0.12): void {
+    if (!this.isSoundEnabled) return;
+    const freqs = this.DTMF_FREQUENCIES[digit];
+    if (!freqs) return;
+
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    try {
+      const now = ctx.currentTime;
+      const [lowFreq, highFreq] = freqs;
+
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(lowFreq, now);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(highFreq, now);
+
+      // Fast attack, smooth decay envelope
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(0.18 * this.volume, now + 0.005);
+      gain.gain.setValueAtTime(0.18 * this.volume, now + duration - 0.02);
+      gain.gain.linearRampToValueAtTime(0.0001, now + duration);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + duration + 0.02);
+      osc2.stop(now + duration + 0.02);
+    } catch (e) {
+      // Ignore audio glitch
+    }
+  }
+
+  /**
+   * Plays a subtle mechanical tap/click sound for backspace/delete
+   */
+  static playBackspaceClick(): void {
+    if (!this.isSoundEnabled) return;
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(140, now + 0.04);
+
+      gain.gain.setValueAtTime(0.14 * this.volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.05);
+    } catch (e) {}
+  }
+
+  /**
+   * Triggers device haptic vibration feedback
+   */
+  static triggerHaptic(pattern: number | number[] = 15): void {
+    if (typeof window !== 'undefined' && 'navigator' in window && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(pattern);
+      } catch (e) {}
+    }
+  }
+
+  /**
    * Stops all active ringtones, ringbacks, and loops immediately.
    */
   static stopAll(): void {

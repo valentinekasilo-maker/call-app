@@ -1,13 +1,15 @@
 import React from 'react';
-import { Star, Clock, User, Phone } from 'lucide-react';
+import { MessageSquare, Phone, Users, Settings } from 'lucide-react';
+import { SoundManager } from '@callapp/shared';
 
-export type ActiveTab = 'favorites' | 'history' | 'contacts' | 'keypad';
+export type ActiveTab = 'chats' | 'calls' | 'contacts' | 'settings';
 
 interface NavigationBarProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
   badgeCounts?: {
-    history?: number;
+    chats?: number;
+    calls?: number;
   };
 }
 
@@ -18,25 +20,26 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
 }) => {
   const tabs = [
     {
-      id: 'favorites' as ActiveTab,
-      label: 'Favorites',
-      icon: Star,
+      id: 'chats' as ActiveTab,
+      label: 'Chats',
+      icon: MessageSquare,
+      badge: badgeCounts?.chats,
     },
     {
-      id: 'history' as ActiveTab,
-      label: 'Recents',
-      icon: Clock,
-      badge: badgeCounts?.history,
+      id: 'calls' as ActiveTab,
+      label: 'Calls',
+      icon: Phone,
+      badge: badgeCounts?.calls,
     },
     {
       id: 'contacts' as ActiveTab,
       label: 'Contacts',
-      icon: User,
+      icon: Users,
     },
     {
-      id: 'keypad' as ActiveTab,
-      label: 'Keypad',
-      icon: Phone,
+      id: 'settings' as ActiveTab,
+      label: 'Settings',
+      icon: Settings,
     },
   ];
 
@@ -66,7 +69,10 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
         return (
           <button
             key={tab.id}
-            onClick={() => onTabChange(tab.id)}
+            onClick={() => {
+              SoundManager.triggerHaptic(12);
+              onTabChange(tab.id);
+            }}
             style={{
               flex: 1,
               display: 'flex',
@@ -77,6 +83,9 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
               padding: '4px 0',
               color: isActive ? 'var(--nav-tab-active)' : 'var(--nav-tab-inactive)',
               position: 'relative',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
               transition: 'color 0.15s ease',
             }}
           >
@@ -84,7 +93,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
               <IconComponent
                 size={22}
                 strokeWidth={isActive ? 2.3 : 1.8}
-                fill={isActive && (tab.id === 'favorites' || tab.id === 'keypad') ? 'currentColor' : 'none'}
+                fill={isActive && (tab.id === 'chats' || tab.id === 'calls') ? 'currentColor' : 'none'}
               />
               {tab.badge && tab.badge > 0 ? (
                 <span
@@ -96,7 +105,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                     height: '16px',
                     padding: '0 4px',
                     borderRadius: '8px',
-                    backgroundColor: 'var(--accent-hangup)',
+                    backgroundColor: tab.id === 'chats' ? 'var(--accent-primary)' : 'var(--accent-hangup)',
                     color: '#FFFFFF',
                     fontSize: '0.65rem',
                     fontWeight: 700,

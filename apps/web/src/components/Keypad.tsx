@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Phone, Delete, Clipboard, Check, UserPlus } from 'lucide-react';
+import { Phone, Video, Delete, Clipboard, Check, UserPlus } from 'lucide-react';
 import { useCall } from '../context/CallContext';
 import { useAuth } from '../context/AuthContext';
-import { cleanAppId, formatAppId } from '@callapp/shared';
+import { cleanAppId, formatAppId, CallType, SoundManager } from '@callapp/shared';
 
 interface KeypadButtonDef {
   digit: string;
@@ -34,6 +34,8 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
   const backspaceTimerRef = useRef<any>(null);
 
   const handleDigit = useCallback((digit: string) => {
+    SoundManager.playDTMFTone(digit);
+    SoundManager.triggerHaptic(15);
     setCallNotice(null);
     setAppIdInput(prev => {
       const clean = cleanAppId(prev);
@@ -45,11 +47,15 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
   }, []);
 
   const handleBackspace = useCallback(() => {
+    SoundManager.playBackspaceClick();
+    SoundManager.triggerHaptic(20);
     setCallNotice(null);
     setAppIdInput(prev => prev.slice(0, -1));
   }, []);
 
   const handleClear = useCallback(() => {
+    SoundManager.playBackspaceClick();
+    SoundManager.triggerHaptic([20, 30, 20]);
     setCallNotice(null);
     setAppIdInput('');
     setLookupUser(null);
@@ -120,7 +126,8 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
     }
   }, [appIdInput, token]);
 
-  const handleCall = () => {
+  const handleCall = (callType: CallType = 'audio') => {
+    SoundManager.triggerHaptic(40);
     const raw = cleanAppId(appIdInput);
     if (raw.length === 0) {
       setCallNotice('Enter a 10-digit App ID to place call');
@@ -137,7 +144,7 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
       setCallNotice('Connecting to network... calling now');
       setTimeout(() => setCallNotice(null), 3000);
     }
-    initiateCall(raw);
+    initiateCall(raw, callType);
   };
 
   const handleCopyInput = () => {
@@ -334,23 +341,48 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: '20px',
           width: '100%',
           position: 'relative',
           height: '80px',
         }}
       >
-        {/* Centered Circular Call Button */}
+        {/* Voice Call Button */}
         <button
-          onClick={handleCall}
+          onClick={() => handleCall('audio')}
           className="ios-call-button"
-          title="Call (10-digit App ID)"
+          title="Voice Call (10-digit App ID)"
           style={{
             transform: rawLength === 10 ? 'scale(1.05)' : 'scale(1)',
             opacity: rawLength === 10 ? 1 : 0.9,
             cursor: 'pointer',
           }}
         >
-          <Phone size={32} fill="currentColor" />
+          <Phone size={30} fill="currentColor" />
+        </button>
+
+        {/* Video Call Button */}
+        <button
+          onClick={() => handleCall('video')}
+          title="Video Call (10-digit App ID)"
+          style={{
+            width: '68px',
+            height: '68px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--accent-blue)',
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 8px 24px rgba(10, 132, 255, 0.45)',
+            border: 'none',
+            cursor: 'pointer',
+            transform: rawLength === 10 ? 'scale(1.05)' : 'scale(1)',
+            opacity: rawLength === 10 ? 1 : 0.9,
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Video size={30} />
         </button>
 
         {/* Backspace Button on Right */}
@@ -364,18 +396,21 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
             onMouseLeave={() => clearTimeout(backspaceTimerRef.current)}
             style={{
               position: 'absolute',
-              right: '12px',
-              width: '48px',
-              height: '48px',
+              right: '8px',
+              width: '44px',
+              height: '44px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--text-muted)',
               borderRadius: '50%',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
             }}
             title="Delete (Hold to clear)"
           >
-            <Delete size={26} />
+            <Delete size={24} />
           </button>
         )}
       </div>

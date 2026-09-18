@@ -1,18 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useCall } from './context/CallContext';
 import { useTheme } from './context/ThemeContext';
+import { useChat } from './context/ChatContext';
 import { AuthView } from './components/AuthView';
 import { NavigationBar, ActiveTab } from './components/NavigationBar';
-import { Keypad } from './components/Keypad';
+import { ChatListView } from './components/chat/ChatListView';
+import { ConversationView } from './components/chat/ConversationView';
+import { NewChatModal } from './components/chat/NewChatModal';
+import { CallsView } from './components/CallsView';
 import { ContactsList } from './components/ContactsList';
-import { CallHistory } from './components/CallHistory';
+import { SettingsView } from './components/SettingsView';
 import { IncomingCallModal } from './components/IncomingCallModal';
 import { OutgoingCallModal } from './components/OutgoingCallModal';
 import { ActiveCallModal } from './components/ActiveCallModal';
 import { DeviceSettingsModal } from './components/DeviceSettingsModal';
 import { IdentityManagerModal } from './components/IdentityManagerModal';
 import {
+  MessageSquare,
   Phone,
   Settings,
   LogOut,
@@ -21,7 +26,6 @@ import {
   AlertCircle,
   Sun,
   Moon,
-  Star,
   Key,
 } from 'lucide-react';
 import { formatAppId } from '@callapp/shared';
@@ -30,20 +34,55 @@ export const App: React.FC = () => {
   const { user, token, isLoading, logout } = useAuth();
   const { isConnected, errorMessage, clearError, unreadMissedCount, markMissedCallsViewed } = useCall();
   const { theme, toggleTheme } = useTheme();
+  const {
+    conversations,
+    activeConversationId,
+    activeConversation,
+    messages,
+    typingState,
+    totalUnreadChats,
+    selectConversation,
+    startDirectChat,
+    sendMessage,
+    editMessage,
+    deleteMessage,
+    reactToMessage,
+    sendTyping,
+    deleteConversation,
+    uploadMedia,
+  } = useChat();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('keypad');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('chats');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showIdentities, setShowIdentities] = useState<boolean>(false);
+  const [showNewChatModal, setShowNewChatModal] = useState<boolean>(false);
   const [copiedAppId, setCopiedAppId] = useState<boolean>(false);
   const [prefillAppId, setPrefillAppId] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => window.innerWidth >= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleTabChange = (tab: ActiveTab) => {
     setActiveTab(tab);
-    if (tab === 'history') {
+    if (tab === 'calls') {
       markMissedCallsViewed();
     }
   };
 
+  const handleStartChatFromContact = async (appId: string) => {
+    try {
+      await startDirectChat(appId);
+      setActiveTab('chats');
+    } catch (e: any) {
+      console.warn('Failed to start chat from contact:', e);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -59,23 +98,23 @@ export const App: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
           <div
             style={{
-              width: '54px',
-              height: '54px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, var(--accent-call) 0%, #28B84C 100%)',
+              width: '60px',
+              height: '60px',
+              borderRadius: '18px',
+              background: 'linear-gradient(135deg, var(--accent-primary) 0%, #5856D6 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#FFFFFF',
-              boxShadow: '0 8px 24px rgba(52, 199, 89, 0.3)',
+              boxShadow: '0 8px 24px rgba(10, 132, 255, 0.35)',
             }}
           >
-            <Phone size={28} fill="currentColor" />
+            <MessageSquare size={30} />
           </div>
-          <span>Connecting Phone...</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Connecting Messenger...</span>
         </div>
       </div>
     );
@@ -93,212 +132,222 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleAddContactFromKeypad = (appId: string) => {
-    setPrefillAppId(appId);
-    setActiveTab('contacts');
-  };
-
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         backgroundColor: 'var(--bg-app)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '0',
+        padding: isDesktop ? '16px' : '0',
       }}
     >
-      {/* ── iOS Phone Chassis Canvas ──────────────────────────────── */}
+      {/* ── Mobile Phone Chassis Canvas ────────────────────────────── */}
       <div
         style={{
           width: '100%',
-          maxWidth: '440px',
-          minHeight: '100vh',
+          maxWidth: isDesktop ? '460px' : '100%',
+          height: isDesktop ? '92vh' : '100dvh',
+          maxHeight: isDesktop ? '900px' : '100dvh',
           backgroundColor: 'var(--bg-chassis)',
-          boxShadow: 'var(--shadow-chassis)',
+          boxShadow: isDesktop ? '0 24px 64px rgba(0, 0, 0, 0.45)' : 'none',
+          borderRadius: isDesktop ? '28px' : '0',
+          border: isDesktop ? '1px solid var(--border-glass)' : 'none',
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
-          overflowX: 'hidden',
+          overflow: 'hidden',
         }}
       >
-        {/* ── Top Header / Status Bar ─────────────────────────────── */}
-        <header
-          style={{
-            padding: '1rem 1.25rem 0.75rem 1.25rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderBottom: '1px solid var(--border-glass-subtle)',
-            backgroundColor: 'var(--nav-bar-bg)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            position: 'sticky',
-            top: 0,
-            zIndex: 40,
-          }}
-        >
-          {/* User Info & 10-Digit App ID */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--accent-call) 0%, #28B84C 100%)',
-                color: '#FFFFFF',
-                fontWeight: 700,
-                fontSize: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(52, 199, 89, 0.25)',
-                flexShrink: 0,
-              }}
-            >
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.96rem', color: 'var(--text-primary)' }}>
-                  {user.name}
-                </span>
-                <span
-                  className={`presence-dot presence-${isConnected ? 'online' : 'offline'}`}
-                  title={isConnected ? 'Connected' : 'Connecting...'}
-                />
+        {/* ── Top Header Bar (Hidden when actively inside a conversation) ── */}
+        {(!activeConversationId || activeTab !== 'chats') && (
+          <header
+            style={{
+              padding: '12px 18px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid var(--border-glass)',
+              backgroundColor: 'var(--nav-bar-bg)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              zIndex: 40,
+            }}
+          >
+            {/* User Profile & 10-Digit App ID */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--accent-primary) 0%, #5856D6 100%)',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 14px rgba(10, 132, 255, 0.25)',
+                  flexShrink: 0,
+                }}
+              >
+                {user.name.charAt(0).toUpperCase()}
               </div>
 
-              {/* 1-Click Copy App ID Pill */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                    {user.name}
+                  </span>
+                  <span
+                    className={`presence-dot presence-${isConnected ? 'online' : 'offline'}`}
+                    title={isConnected ? 'Connected & Live' : 'Connecting...'}
+                  />
+                </div>
+
+                {/* 1-Click Copy 10-Digit App ID Pill */}
+                <button
+                  onClick={handleCopyAppId}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.74rem',
+                    color: 'var(--text-muted)',
+                    marginTop: '1px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '0',
+                  }}
+                  title="Click to copy your 10-digit App ID"
+                >
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                    ID: {formatAppId(user.appId)}
+                  </span>
+                  {copiedAppId ? <Check size={12} color="#34C759" /> : <Copy size={12} color="var(--text-dim)" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions Header Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {/* Theme Toggle */}
               <button
-                onClick={handleCopyAppId}
+                onClick={toggleTheme}
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.76rem',
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-glass)',
                   color: 'var(--text-muted)',
-                  marginTop: '1px',
-                  padding: '0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
                 }}
-                title="Click to copy your 10-digit App ID"
+                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
               >
-                <span>ID: {formatAppId(user.appId)}</span>
-                {copiedAppId ? (
-                  <Check size={12} color="var(--accent-call)" />
-                ) : (
-                  <Copy size={12} color="var(--text-dim)" />
-                )}
+                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+
+              {/* Calling Identities / Lucia AI Key Manager */}
+              <button
+                onClick={() => setShowIdentities(true)}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(10, 132, 255, 0.12)',
+                  border: '1px solid rgba(10, 132, 255, 0.25)',
+                  color: 'var(--accent-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                title="Lucia AI & Developer API Keys"
+              >
+                <Key size={15} />
+              </button>
+
+              {/* Audio Settings */}
+              <button
+                onClick={() => setShowSettings(true)}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-glass)',
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                title="Audio Device Settings"
+              >
+                <Settings size={16} />
+              </button>
+
+              {/* Sign Out */}
+              <button
+                onClick={logout}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-glass)',
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                title="Sign Out"
+              >
+                <LogOut size={16} />
               </button>
             </div>
-          </div>
-
-          {/* Quick Action Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {/* Appearance Toggle */}
-            <button
-              onClick={toggleTheme}
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--bg-surface-subtle)',
-                color: 'var(--text-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-            >
-              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-
-            {/* Calling Identities Management Button */}
-            <button
-              onClick={() => setShowIdentities(true)}
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(0, 122, 255, 0.12)',
-                color: '#007AFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              title="Calling Identities & API Keys"
-            >
-              <Key size={16} />
-            </button>
-
-            {/* Audio Settings Button */}
-            <button
-              onClick={() => setShowSettings(true)}
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--bg-surface-subtle)',
-                color: 'var(--text-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              title="Settings"
-            >
-              <Settings size={17} />
-            </button>
-
-            {/* Sign Out Button */}
-            <button
-              onClick={logout}
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--bg-surface-subtle)',
-                color: 'var(--text-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              title="Sign Out"
-            >
-              <LogOut size={17} />
-            </button>
-
-          </div>
-        </header>
+          </header>
+        )}
 
         {/* ── Error Toast Alert ───────────────────────────────────── */}
         {errorMessage && (
           <div
             className="animate-slide-up"
             style={{
-              margin: '0.75rem 1rem 0 1rem',
-              padding: '0.75rem 1rem',
-              borderRadius: '14px',
+              margin: '10px 16px 0 16px',
+              padding: '10px 16px',
+              borderRadius: '16px',
               backgroundColor: 'rgba(255, 59, 48, 0.12)',
               border: '1px solid rgba(255, 59, 48, 0.25)',
-              color: 'var(--accent-hangup)',
+              color: '#FF3B30',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               fontSize: '0.85rem',
+              zIndex: 35,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertCircle size={16} />
               <span>{errorMessage}</span>
             </div>
             <button
               onClick={clearError}
               style={{
-                color: 'var(--accent-hangup)',
+                background: 'none',
+                border: 'none',
+                color: '#FF3B30',
                 fontSize: '0.78rem',
                 fontWeight: 600,
+                cursor: 'pointer',
               }}
             >
               Dismiss
@@ -307,60 +356,122 @@ export const App: React.FC = () => {
         )}
 
         {/* ── Main Tab Content ────────────────────────────────────── */}
-        <main style={{ flex: 1, padding: '1rem 1.25rem', width: '100%' }}>
-          {activeTab === 'keypad' && (
-            <Keypad onAddContact={handleAddContactFromKeypad} />
+        <main style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+          {/* TAB 1: CHATS (1-to-1 Private Local Messaging) */}
+          {activeTab === 'chats' && (
+            <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+              {!activeConversationId ? (
+                <div style={{ width: '100%', height: '100%' }}>
+                  <ChatListView
+                    conversations={conversations}
+                    activeConversationId={activeConversationId}
+                    typingState={typingState}
+                    onSelectConversation={id => selectConversation(id)}
+                    onOpenNewChatModal={() => setShowNewChatModal(true)}
+                    onDeleteConversation={deleteConversation}
+                  />
+                </div>
+              ) : activeConversation ? (
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <ConversationView
+                    conversation={activeConversation}
+                    messages={messages[activeConversation.id] || []}
+                    typingUsers={typingState[activeConversation.id] || []}
+                    onBack={() => selectConversation(null)}
+                    onSendMessage={params =>
+                      sendMessage({
+                        conversationId: activeConversation.id,
+                        targetAppId: activeConversation.contactAppId,
+                        ...params,
+                      })
+                    }
+                    onEditMessage={(msgId, content) =>
+                      editMessage(activeConversation.id, activeConversation.contactAppId, msgId, content)
+                    }
+                    onDeleteMessage={msgId =>
+                      deleteMessage(activeConversation.id, activeConversation.contactAppId, msgId)
+                    }
+                    onReactToMessage={(msgId, emoji, action) =>
+                      reactToMessage(activeConversation.id, activeConversation.contactAppId, msgId, emoji, action)
+                    }
+                    onSendTyping={isTyping =>
+                      sendTyping(activeConversation.id, activeConversation.contactAppId, isTyping)
+                    }
+                    onDeleteConversation={deleteConversation}
+                    onUploadMedia={uploadMedia}
+                  />
+                </div>
+              ) : null}
+            </div>
           )}
 
-          {activeTab === 'history' && <CallHistory />}
+          {/* TAB 2: CALLS (Keypad + Call History) */}
+          {activeTab === 'calls' && (
+            <div style={{ width: '100%', height: '100%' }}>
+              <CallsView
+                prefillAppId={prefillAppId}
+                unreadMissedCount={unreadMissedCount}
+                onClearMissedBadge={markMissedCallsViewed}
+                onAddContactFromKeypad={appId => {
+                  setPrefillAppId(appId);
+                  setActiveTab('contacts');
+                }}
+              />
+            </div>
+          )}
 
+          {/* TAB 3: CONTACTS */}
           {activeTab === 'contacts' && (
-            <ContactsList
-              initialAddAppId={prefillAppId}
-              onClearInitialAdd={() => setPrefillAppId(null)}
-            />
+            <div style={{ width: '100%', height: '100%' }}>
+              <ContactsList
+                initialAddAppId={prefillAppId}
+                onClearInitialAdd={() => setPrefillAppId(null)}
+                onStartChat={handleStartChatFromContact}
+              />
+            </div>
           )}
 
-          {activeTab === 'favorites' && (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '4rem 1.5rem',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <Star size={42} strokeWidth={1.5} style={{ margin: '0 auto 0.75rem', opacity: 0.3 }} />
-              <p style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                No Favorites
-              </p>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                Quick dial contacts from the Keypad or Contacts tab.
-              </p>
+          {/* TAB 4: SETTINGS */}
+          {activeTab === 'settings' && (
+            <div style={{ width: '100%', height: '100%' }}>
+              <SettingsView
+                onOpenIdentityManager={() => setShowIdentities(true)}
+                onOpenDeviceSettings={() => setShowSettings(true)}
+              />
             </div>
           )}
         </main>
 
-        {/* ── iOS Bottom Navigation Bar ────────────────────────────── */}
-        <NavigationBar
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          badgeCounts={{ history: unreadMissedCount }}
-        />
+        {/* ── iOS / Liquid Glass Bottom Navigation Bar ────────────────────────────── */}
+        {(!activeConversationId || activeTab !== 'chats') && (
+          <NavigationBar
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            badgeCounts={{
+              chats: totalUnreadChats,
+              calls: unreadMissedCount,
+            }}
+          />
+        )}
 
-        {/* ── Native iOS Calling Screens & Modals ──────────────────── */}
+        {/* ── Native Calling Modals (Voice Calling 100% Preserved) ──────────────────── */}
         <IncomingCallModal />
         <OutgoingCallModal />
         <ActiveCallModal onOpenAudioSettings={() => setShowSettings(true)} />
-        <DeviceSettingsModal
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-        />
-        <IdentityManagerModal
-          isOpen={showIdentities}
-          onClose={() => setShowIdentities(false)}
-        />
+        <DeviceSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+        <IdentityManagerModal isOpen={showIdentities} onClose={() => setShowIdentities(false)} />
+
+        {/* ── Direct 1-to-1 Chat Modal ────────────────────────────────────────── */}
+        {showNewChatModal && (
+          <NewChatModal
+            onClose={() => setShowNewChatModal(false)}
+            onStartChat={async appId => {
+              await startDirectChat(appId);
+              setActiveTab('chats');
+            }}
+          />
+        )}
       </div>
     </div>
   );
 };
-

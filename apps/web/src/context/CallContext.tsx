@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { io, Socket } from 'socket.io-client';
 import {
   UserPresence,
+  CallType,
   CallIncomingPayload,
   CallAcceptedPayload,
   CallDeclinedPayload,
@@ -30,6 +31,7 @@ export interface ActiveCallInfo {
   remoteAppId: string;
   remoteName: string;
   isIncoming: boolean;
+  callType: CallType;
   startedAt?: number;
   duration: number; // in seconds
   connectionState: CallConnectionState;
@@ -42,26 +44,35 @@ interface CallContextType {
   activeCall: ActiveCallInfo | null;
   errorMessage: string | null;
   isMuted: boolean;
+  isVideoMuted: boolean;
   localAudioLevel: number;
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
   presenceMap: Record<string, UserPresence>;
   unreadMissedCount: number;
   availableInputs: MediaDeviceInfo[];
   availableOutputs: MediaDeviceInfo[];
+  availableVideoInputs: MediaDeviceInfo[];
   selectedInputId: string;
   selectedOutputId: string;
+  selectedVideoInputId: string;
   setSelectedInputId: (id: string) => void;
   setSelectedOutputId: (id: string) => void;
-  initiateCall: (targetAppId: string) => Promise<void>;
+  setSelectedVideoInputId: (id: string) => void;
+  initiateCall: (targetAppId: string, callType?: CallType) => Promise<void>;
   acceptCall: () => Promise<void>;
   rejectCall: () => void;
   cancelCall: () => void;
   endCall: () => void;
   toggleMute: () => void;
+  toggleVideoMute: () => void;
+  switchCamera: (deviceId?: string) => Promise<void>;
   clearError: () => void;
   markMissedCallsViewed: () => void;
   queryPresence: (appIds: string[]) => void;
   requestNotificationPermission: () => Promise<NotificationPermission>;
   requestMicrophonePermission: () => Promise<boolean>;
+  requestCameraPermission: () => Promise<boolean>;
 }
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
@@ -77,7 +88,10 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
   const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isVideoMuted, setIsVideoMuted] = useState<boolean>(false);
   const [localAudioLevel, setLocalAudioLevel] = useState<number>(0);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
   const [unreadMissedCount, setUnreadMissedCount] = useState<number>(() => {
     try {
@@ -89,15 +103,17 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
 
   const [availableInputs, setAvailableInputs] = useState<MediaDeviceInfo[]>([]);
   const [availableOutputs, setAvailableOutputs] = useState<MediaDeviceInfo[]>([]);
+  const [availableVideoInputs, setAvailableVideoInputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedInputId, setSelectedInputId] = useState<string>('');
   const [selectedOutputId, setSelectedOutputId] = useState<string>('');
+  const [selectedVideoInputId, setSelectedVideoInputId] = useState<string>('');
 
   const rtcSessionRef = useRef<WebRTCCallSession | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const durationTimerRef = useRef<any>(null);
   const incomingCallIdRef = useRef<string | null>(null);
 
-  // Audio device enumeration
+  // Audio and Video device enumeration
   useEffect(() => {
     const refreshDevices = async () => {
       try {
@@ -105,10 +121,13 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const inputs = devices.filter(d => d.kind === 'audioinput');
         const outputs = devices.filter(d => d.kind === 'audiooutput');
+        const videoInputs = devices.filter(d => d.kind === 'videoinput');
         setAvailableInputs(inputs);
         setAvailableOutputs(outputs);
+        setAvailableVideoInputs(videoInputs);
         if (inputs.length > 0 && !selectedInputId) setSelectedInputId(inputs[0].deviceId);
         if (outputs.length > 0 && !selectedOutputId) setSelectedOutputId(outputs[0].deviceId);
+        if (videoInputs.length > 0 && !selectedVideoInputId) setSelectedVideoInputId(videoInputs[0].deviceId);
       } catch (e) {
         console.warn('Device enumeration failed:', e);
       }
@@ -119,7 +138,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     return () => {
       navigator.mediaDevices?.removeEventListener?.('devicechange', refreshDevices);
     };
-  }, [selectedInputId, selectedOutputId]);
+  }, [selectedInputId, selectedOutputId, selectedVideoInputId]);
 
   // Notification permission is requested on user demand or settings, not on page load
 
@@ -148,6 +167,9 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     setCallState('idle');
     setActiveCall(null);
     setIsMuted(false);
+    setIsVideoMuted(false);
+    setLocalStream(null);
+    setRemoteStream(null);
     setLocalAudioLevel(0);
   }, []);
 
@@ -232,6 +254,22 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     }
   }, [selectedInputId]);
 
+  const requestCameraPermission = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) return false;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter(d => d.kind === 'videoinput');
+      setAvailableVideoInputs(videoInputs);
+      if (videoInputs.length > 0 && !selectedVideoInputId) setSelectedVideoInputId(videoInputs[0].deviceId);
+      return true;
+    } catch (e) {
+      console.warn('Camera permission request failed:', e);
+      return false;
+    }
+  }, [selectedVideoInputId]);
+
   // Socket Connection Management
   useEffect(() => {
     if (!token || !user) {
@@ -296,6 +334,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         remoteAppId: payload.callerAppId,
         remoteName: payload.callerName,
         isIncoming: true,
+        callType: payload.callType || 'audio',
         duration: 0,
         connectionState: 'new',
       };
@@ -335,7 +374,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
     });
 
     // ──────────────────────────────────────────────────────────────
-    // 3. CALL ACCEPTED (WebRTC Audio Starts)
+    // 3. CALL ACCEPTED (WebRTC Audio & Video Starts)
     // ──────────────────────────────────────────────────────────────
     newSocket.on('call:accepted', async (payload: CallAcceptedPayload) => {
       CallNotificationManager.clearNotification();
@@ -345,11 +384,14 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
       setCallState('active_call');
 
       const currentCall = activeCallRef.current;
+      const effectiveCallType: CallType = payload.callType || currentCall?.callType || 'audio';
+
       const updatedCall: ActiveCallInfo = {
         callId: payload.callId,
         remoteAppId: currentCall?.remoteAppId || '',
         remoteName: payload.receiverName || currentCall?.remoteName || '',
         isIncoming: currentCall ? currentCall.isIncoming : false,
+        callType: effectiveCallType,
         duration: 0,
         startedAt: Date.now(),
         connectionState: 'connecting',
@@ -370,14 +412,18 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         }
 
         const session = new WebRTCCallSession(payload.webrtcConfig, {
-          onConnectionStateChange: (state: CallConnectionState) => {
-            setActiveCall(prev => (prev ? { ...prev, connectionState: state } : null));
+          onLocalStream: (stream: MediaStream) => {
+            setLocalStream(stream);
           },
           onRemoteStream: (stream: MediaStream) => {
+            setRemoteStream(stream);
             if (remoteAudioRef.current) {
               remoteAudioRef.current.srcObject = stream;
               remoteAudioRef.current.play().catch(e => console.warn('Audio play blocked:', e));
             }
+          },
+          onConnectionStateChange: (state: CallConnectionState) => {
+            setActiveCall(prev => (prev ? { ...prev, connectionState: state } : null));
           },
           onAudioLevel: (level: number) => {
             setLocalAudioLevel(level);
@@ -388,7 +434,8 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         });
 
         rtcSessionRef.current = session;
-        await session.initLocalStream(selectedInputId);
+        const isVideo = effectiveCallType === 'video';
+        await session.initLocalStream(selectedInputId, selectedVideoInputId, isVideo);
 
         // Caller creates initial offer
         if (currentCall && !currentCall.isIncoming) {
@@ -397,7 +444,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         }
       } catch (err: any) {
         console.error('WebRTC initialization failed:', err);
-        setErrorMessage('Failed to access microphone or establish audio connection.');
+        setErrorMessage('Failed to access media devices or establish call connection.');
         cleanupCallSession();
       }
     });
@@ -507,9 +554,9 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
       socketRef.current = null;
       cleanupCallSession();
     };
-  }, [token, user?.id, deviceType, cleanupCallSession]);
+  }, [token, user?.id, deviceType, cleanupCallSession, selectedInputId, selectedVideoInputId]);
 
-  const initiateCall = async (targetAppId: string) => {
+  const initiateCall = async (targetAppId: string, callType: CallType = 'audio') => {
     if (!socket || !isConnected) {
       setErrorMessage('Phone is not connected to network.');
       return;
@@ -527,6 +574,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
       remoteAppId: targetAppId,
       remoteName: 'Calling...',
       isIncoming: false,
+      callType,
       duration: 0,
       connectionState: 'new',
     };
@@ -536,7 +584,7 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
 
     SoundManager.playRingback();
 
-    socket.emit('call:initiate', { targetAppId }, (res: any) => {
+    socket.emit('call:initiate', { targetAppId, callType }, (res: any) => {
       if (!res.success) {
         SoundManager.playEndedSound();
         setErrorMessage(res.error?.message || 'Call failed.');
@@ -555,6 +603,29 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
       const nextMuted = !isMuted;
       rtcSessionRef.current.setMuted(nextMuted);
       setIsMuted(nextMuted);
+    }
+  };
+
+  const toggleVideoMute = () => {
+    if (rtcSessionRef.current) {
+      const nextMuted = !isVideoMuted;
+      rtcSessionRef.current.setVideoMuted(nextMuted);
+      setIsVideoMuted(nextMuted);
+    }
+  };
+
+  const switchCamera = async (deviceId?: string) => {
+    if (rtcSessionRef.current) {
+      const targetId = deviceId || (
+        availableVideoInputs.find(d => d.deviceId !== selectedVideoInputId)?.deviceId || ''
+      );
+      if (targetId) {
+        const stream = await rtcSessionRef.current.switchCamera(targetId);
+        if (stream) {
+          setSelectedVideoInputId(targetId);
+          setLocalStream(stream);
+        }
+      }
     }
   };
 
@@ -581,26 +652,35 @@ export const CallProvider: React.FC<{ children: ReactNode; deviceType?: 'web' | 
         activeCall,
         errorMessage,
         isMuted,
+        isVideoMuted,
         localAudioLevel,
+        localStream,
+        remoteStream,
         presenceMap,
         unreadMissedCount,
         availableInputs,
         availableOutputs,
+        availableVideoInputs,
         selectedInputId,
         selectedOutputId,
+        selectedVideoInputId,
         setSelectedInputId,
         setSelectedOutputId,
+        setSelectedVideoInputId,
         initiateCall,
         acceptCall,
         rejectCall,
         cancelCall,
         endCall,
         toggleMute,
+        toggleVideoMute,
+        switchCamera,
         clearError,
         markMissedCallsViewed,
         queryPresence,
         requestNotificationPermission,
         requestMicrophonePermission,
+        requestCameraPermission,
       }}
     >
       {children}

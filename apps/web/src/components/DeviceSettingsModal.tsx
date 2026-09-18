@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, Volume2, X, Moon, Sun, Shield, Info } from 'lucide-react';
+import { Mic, Volume2, Video, X, Moon, Sun, Shield, Info } from 'lucide-react';
 import { useCall } from '../context/CallContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -10,12 +10,16 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
   const {
     availableInputs,
     availableOutputs,
+    availableVideoInputs,
     selectedInputId,
     selectedOutputId,
+    selectedVideoInputId,
     setSelectedInputId,
     setSelectedOutputId,
+    setSelectedVideoInputId,
     requestNotificationPermission,
     requestMicrophonePermission,
+    requestCameraPermission,
   } = useCall();
   const { theme, setTheme } = useTheme();
 
@@ -41,6 +45,8 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
         style={{
           width: '100%',
           maxWidth: '380px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           padding: '1.75rem',
           borderRadius: '24px',
           position: 'relative',
@@ -60,6 +66,8 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              border: 'none',
+              cursor: 'pointer',
             }}
           >
             <X size={18} />
@@ -92,6 +100,48 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
                 <span>Dark</span>
               </button>
             </div>
+          </div>
+
+          {/* ── Camera Selection ──────────────────────────────────── */}
+          <div>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.78rem',
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                marginBottom: '6px',
+              }}
+            >
+              <Video size={14} color="var(--accent-blue)" />
+              Camera / Video Input
+            </label>
+            <select
+              value={selectedVideoInputId}
+              onChange={e => setSelectedVideoInputId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '12px',
+                backgroundColor: 'var(--bg-surface-subtle)',
+                border: '1px solid var(--border-glass-subtle)',
+                color: 'var(--text-primary)',
+                fontSize: '0.88rem',
+              }}
+            >
+              {availableVideoInputs.length === 0 ? (
+                <option value="">Default Camera</option>
+              ) : (
+                availableVideoInputs.map(d => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label || `Camera (${d.deviceId.slice(0, 5)})`}
+                  </option>
+                ))
+              )}
+            </select>
           </div>
 
           {/* ── Microphone Selection ──────────────────────────────── */}
@@ -197,6 +247,49 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
             </label>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Camera Permission */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-surface-subtle)',
+                  border: '1px solid var(--border-glass-subtle)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Video size={15} color="var(--accent-blue)" />
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Camera Access
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const granted = await requestCameraPermission();
+                    if (granted) {
+                      alert('Camera access enabled successfully.');
+                    } else {
+                      alert('Please allow camera permissions in your browser or OS settings.');
+                    }
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                    color: 'var(--accent-blue)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {availableVideoInputs.length > 0 && availableVideoInputs[0].label ? 'Granted' : 'Grant / Test'}
+                </button>
+              </div>
+
               {/* Microphone Permission */}
               <div
                 style={{
@@ -299,6 +392,8 @@ export const DeviceSettingsModal: React.FC<{ isOpen: boolean; onClose: () => voi
             color: '#FFFFFF',
             fontWeight: 600,
             fontSize: '0.92rem',
+            border: 'none',
+            cursor: 'pointer',
           }}
         >
           Done

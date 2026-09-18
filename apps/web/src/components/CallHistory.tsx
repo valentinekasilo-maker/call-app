@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, RotateCcw, Info } from 'lucide-react';
+import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, RotateCcw, Info } from 'lucide-react';
 import { CallRecord, formatAppId } from '@callapp/shared';
 import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
@@ -226,26 +226,28 @@ export const CallHistory: React.FC = () => {
                   </div>
 
                   {/* Right: Date/Time + Redial */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                       {formatCallDate(call.startedAt)}
                     </span>
                     <button
-                      onClick={() => initiateCall(remoteAppId)}
+                      onClick={() => initiateCall(remoteAppId, call.callType || 'audio')}
                       disabled={!isConnected}
                       style={{
                         width: '32px',
                         height: '32px',
                         borderRadius: '50%',
                         backgroundColor: 'var(--bg-surface-subtle)',
-                        color: 'var(--accent-call)',
+                        color: call.callType === 'video' ? 'var(--accent-blue)' : 'var(--accent-call)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        border: 'none',
+                        cursor: 'pointer',
                       }}
-                      title={`Call ${remoteName}`}
+                      title={`Redial ${remoteName}`}
                     >
-                      <Phone size={15} fill="currentColor" />
+                      {call.callType === 'video' ? <Video size={15} /> : <Phone size={15} fill="currentColor" />}
                     </button>
                   </div>
                 </div>

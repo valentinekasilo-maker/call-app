@@ -1,5 +1,5 @@
 import React from 'react';
-import { PhoneOff, Phone } from 'lucide-react';
+import { PhoneOff, Phone, Video } from 'lucide-react';
 import { useCall } from '../context/CallContext';
 import { formatAppId } from '@callapp/shared';
 
@@ -7,6 +7,8 @@ export const OutgoingCallModal: React.FC = () => {
   const { callState, activeCall, cancelCall } = useCall();
 
   if (callState !== 'outgoing_ringing' || !activeCall) return null;
+
+  const isVideo = activeCall.callType === 'video';
 
   return (
     <div
@@ -29,13 +31,23 @@ export const OutgoingCallModal: React.FC = () => {
         <div
           style={{
             fontSize: '0.85rem',
-            color: 'var(--text-muted)',
-            fontWeight: 500,
+            color: isVideo ? 'var(--accent-blue)' : 'var(--text-muted)',
+            fontWeight: 600,
             letterSpacing: '0.04em',
             marginBottom: '0.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
           }}
         >
-          calling...
+          {isVideo ? (
+            <>
+              <Video size={16} color="#0A84FF" />
+              <span>Calling (Video)...</span>
+            </>
+          ) : (
+            <span>Calling...</span>
+          )}
         </div>
 
         <h1
@@ -69,16 +81,25 @@ export const OutgoingCallModal: React.FC = () => {
             width: '110px',
             height: '110px',
             borderRadius: '50%',
-            backgroundColor: 'var(--accent-blue)',
+            backgroundColor: isVideo ? 'var(--accent-blue)' : 'var(--accent-call)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#FFFFFF',
             fontSize: '2.5rem',
             fontWeight: 600,
+            boxShadow: isVideo
+              ? '0 12px 36px rgba(10, 132, 255, 0.45)'
+              : '0 12px 36px rgba(52, 199, 89, 0.45)',
           }}
         >
-          {activeCall.remoteName ? activeCall.remoteName.charAt(0).toUpperCase() : <Phone size={44} />}
+          {activeCall.remoteName ? (
+            activeCall.remoteName.charAt(0).toUpperCase()
+          ) : isVideo ? (
+            <Video size={44} />
+          ) : (
+            <Phone size={44} />
+          )}
         </div>
       </div>
 
@@ -108,7 +129,7 @@ export const OutgoingCallModal: React.FC = () => {
         >
           <PhoneOff size={32} />
         </button>
-        <span style={{ fontSize: '0.85rem', color: 'var(--accent-hangup)', fontWeight: 600 }}>
+        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>
           Cancel
         </span>
       </div>

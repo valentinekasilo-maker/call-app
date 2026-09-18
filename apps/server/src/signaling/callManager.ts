@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { PresenceManager } from '../presence/presenceManager';
 import { CallRepository } from '../repositories/callRepository';
 import { UserRepository } from '../repositories/userRepository';
-import { isValidAppId, WebRTCConfig, AccountType } from '@callapp/shared';
+import { isValidAppId, WebRTCConfig, AccountType, CallType } from '@callapp/shared';
 import { config } from '../config';
 import { WebhookService } from '../api/webhooks/webhookService';
 
@@ -17,6 +17,7 @@ export interface ActiveCall {
   receiverType?: AccountType;
   receiverSocketId?: string;
   status: 'ringing' | 'accepted' | 'ended';
+  callType?: CallType;
   startedAt: number;
   answeredAt?: number;
   ringTimer?: NodeJS.Timeout;
@@ -76,7 +77,8 @@ export class CallManager {
     callerAppId: string,
     callerName: string,
     targetAppId: string,
-    callback: (response: { success: boolean; callId?: string; error?: any }) => void
+    callback: (response: { success: boolean; callId?: string; error?: any }) => void,
+    callType: CallType = 'audio'
   ): Promise<void> {
     const cleanCallerId = callerAppId.replace(/\D/g, '');
     const cleanTargetId = targetAppId.replace(/\D/g, '');
@@ -121,7 +123,7 @@ export class CallManager {
     // 5. Verify Target User is Online
     const isOnline = PresenceManager.isUserOnline(cleanTargetId);
     const receiverSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
-    console.log(`[CallManager] CALL ROUTING: caller=${cleanCallerId} target_app_id=${cleanTargetId} isOnline=${isOnline} active_connections=${receiverSockets.length}`);
+    console.log(`[CallManager] CALL ROUTING: caller=${cleanCallerId} target_app_id=${cleanTargetId} isOnline=${isOnline} active_connections=${receiverSockets.length} callType=${callType}`);
 
     if (!isOnline && receiverSockets.length === 0) {
       callback({
@@ -179,6 +181,7 @@ export class CallManager {
       receiverName: targetUser.name,
       receiverType: (targetUser.accountType as AccountType) || 'human',
       status: 'ringing',
+      callType,
       startedAt: Date.now(),
       ringTimer,
     };
@@ -193,6 +196,7 @@ export class CallManager {
           callId,
           callerAppId: cleanCallerId,
           callerName,
+          callType,
         });
       }
     }
@@ -392,6 +396,7 @@ export class CallManager {
         callId,
         receiverAppId: call.receiverAppId,
         receiverName: call.receiverName,
+        callType: call.callType,
         webrtcConfig,
       });
     }
@@ -401,6 +406,7 @@ export class CallManager {
       callId,
       receiverAppId: call.receiverAppId,
       receiverName: call.receiverName,
+      callType: call.callType,
       webrtcConfig,
     });
 

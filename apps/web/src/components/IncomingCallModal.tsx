@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, PhoneOff } from 'lucide-react';
+import { Phone, PhoneOff, Video } from 'lucide-react';
 import { useCall } from '../context/CallContext';
 import { formatAppId } from '@callapp/shared';
 
@@ -7,6 +7,8 @@ export const IncomingCallModal: React.FC = () => {
   const { callState, activeCall, acceptCall, rejectCall } = useCall();
 
   if (callState !== 'incoming_ringing' || !activeCall) return null;
+
+  const isVideo = activeCall.callType === 'video';
 
   return (
     <div
@@ -29,13 +31,23 @@ export const IncomingCallModal: React.FC = () => {
         <div
           style={{
             fontSize: '0.85rem',
-            color: 'var(--text-muted)',
-            fontWeight: 500,
+            color: isVideo ? 'var(--accent-blue)' : 'var(--text-muted)',
+            fontWeight: 600,
             letterSpacing: '0.04em',
             marginBottom: '0.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
           }}
         >
-          CallApp Audio
+          {isVideo ? (
+            <>
+              <Video size={16} color="#0A84FF" />
+              <span>Incoming Video Call</span>
+            </>
+          ) : (
+            <span>Incoming Voice Call</span>
+          )}
         </div>
 
         <h1
@@ -69,16 +81,25 @@ export const IncomingCallModal: React.FC = () => {
             width: '110px',
             height: '110px',
             borderRadius: '50%',
-            backgroundColor: 'var(--accent-call)',
+            backgroundColor: isVideo ? 'var(--accent-blue)' : 'var(--accent-call)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#FFFFFF',
             fontSize: '2.5rem',
             fontWeight: 600,
+            boxShadow: isVideo
+              ? '0 12px 36px rgba(10, 132, 255, 0.45)'
+              : '0 12px 36px rgba(52, 199, 89, 0.45)',
           }}
         >
-          {activeCall.remoteName ? activeCall.remoteName.charAt(0).toUpperCase() : <Phone size={44} />}
+          {activeCall.remoteName ? (
+            activeCall.remoteName.charAt(0).toUpperCase()
+          ) : isVideo ? (
+            <Video size={44} />
+          ) : (
+            <Phone size={44} />
+          )}
         </div>
       </div>
 
@@ -141,18 +162,19 @@ export const IncomingCallModal: React.FC = () => {
               acceptCall();
             }}
             className="ios-call-button"
-            title="Accept"
+            title={isVideo ? 'Accept Video' : 'Accept'}
             style={{
               cursor: 'pointer',
               pointerEvents: 'auto',
               border: 'none',
               position: 'relative',
               zIndex: 101,
+              backgroundColor: isVideo ? 'var(--accent-blue)' : undefined,
             }}
           >
-            <Phone size={32} fill="currentColor" />
+            {isVideo ? <Video size={32} /> : <Phone size={32} fill="currentColor" />}
           </button>
-          <span style={{ fontSize: '0.85rem', color: 'var(--accent-call)', fontWeight: 600 }}>
+          <span style={{ fontSize: '0.85rem', color: isVideo ? 'var(--accent-blue)' : 'var(--accent-call)', fontWeight: 600 }}>
             Accept
           </span>
         </div>

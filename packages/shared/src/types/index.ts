@@ -116,6 +116,8 @@ export interface Contact {
   presence?: UserPresence;
 }
 
+export type CallType = 'audio' | 'video';
+
 export interface CallRecord {
   id: string;
   callerAppId: string;
@@ -123,6 +125,7 @@ export interface CallRecord {
   receiverAppId: string;
   receiverName?: string;
   status: CallStatus;
+  callType?: CallType;
   startedAt: string;
   answeredAt?: string | null;
   endedAt?: string | null;
@@ -142,12 +145,14 @@ export interface WebRTCConfig {
 // Signaling Protocol Payloads
 export interface CallInitiatePayload {
   targetAppId: string;
+  callType?: CallType;
 }
 
 export interface CallIncomingPayload {
   callId: string;
   callerAppId: string;
   callerName: string;
+  callType?: CallType;
 }
 
 export interface CallAcceptPayload {
@@ -158,6 +163,7 @@ export interface CallAcceptedPayload {
   callId: string;
   receiverAppId: string;
   receiverName: string;
+  callType?: CallType;
   webrtcConfig: WebRTCConfig;
 }
 
@@ -224,13 +230,125 @@ export interface PresenceStatusResponsePayload {
   statuses: Record<string, UserPresence>;
 }
 
+export type MessageType = 'text' | 'audio';
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+
+export interface LocalConversation {
+  id: string; // usually standard direct format, e.g. direct_0711111111_0722222222 or contactAppId
+  contactAppId: string;
+  contactName: string;
+  contactAvatarUrl?: string;
+  contactAbout?: string;
+  lastMessageAt: string;
+  lastMessagePreview?: string;
+  unreadCount: number;
+  isPinned?: boolean;
+  isMuted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type Conversation = LocalConversation;
+
+export interface MessageReaction {
+  id: string;
+  messageId: string;
+  userAppId: string;
+  userName?: string;
+  emoji: string;
+  createdAt: string;
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderAppId: string;
+  senderName: string;
+  receiverAppId: string;
+  content: string;
+  type: MessageType;
+  mediaUrl?: string;
+  mediaName?: string;
+  mediaSize?: number;
+  mediaDuration?: number; // in seconds for voice notes
+  replyTo?: {
+    id: string;
+    senderName: string;
+    content: string;
+    type: MessageType;
+  };
+  reactions?: MessageReaction[];
+  status: MessageStatus;
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BlockedContact {
+  id: string;
+  userId: string;
+  blockedAppId: string;
+  blockedName?: string;
+  createdAt: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Real-Time Socket Payloads (Ephemeral Relay Only — Zero DB Persistence)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ChatSendPayload {
+  conversationId: string;
+  targetAppId: string;
+  message: Message;
+}
+
+export interface ChatTypingPayload {
+  conversationId: string;
+  targetAppId: string;
+  isTyping: boolean;
+}
+
+export interface ChatReadPayload {
+  conversationId: string;
+  targetAppId: string;
+  messageIds?: string[];
+}
+
+export interface ChatDeliveredPayload {
+  conversationId: string;
+  targetAppId: string;
+  messageId: string;
+}
+
+export interface ChatReactPayload {
+  conversationId: string;
+  targetAppId: string;
+  messageId: string;
+  emoji: string;
+  action: 'add' | 'remove';
+}
+
+export interface ChatEditPayload {
+  conversationId: string;
+  targetAppId: string;
+  messageId: string;
+  content: string;
+}
+
+export interface ChatDeletePayload {
+  conversationId: string;
+  targetAppId: string;
+  messageId: string;
+}
+
 // Client-to-Server Socket Events
 export interface ClientToServerEvents {
   // Presence & Ping
   'presence:ping': () => void;
   'presence:query': (payload: PresenceStatusRequestPayload, callback: (response: PresenceStatusResponsePayload) => void) => void;
 
-  // Call Signaling
+  // Voice Call Signaling
   'call:initiate': (payload: CallInitiatePayload, callback: (response: { success: boolean; callId?: string; error?: CallErrorPayload }) => void) => void;
   'call:accept': (payload: CallAcceptPayload) => void;
   'call:reject': (payload: CallRejectPayload) => void;
@@ -241,6 +359,15 @@ export interface ClientToServerEvents {
   'webrtc:offer': (payload: WebRTCOfferPayload) => void;
   'webrtc:answer': (payload: WebRTCAnswerPayload) => void;
   'webrtc:ice-candidate': (payload: WebRTCIceCandidatePayload) => void;
+
+  // Real-Time Ephemeral Chat Relay
+  'chat:send': (payload: ChatSendPayload, callback?: (response: { success: boolean; delivered: boolean; error?: string }) => void) => void;
+  'chat:typing': (payload: ChatTypingPayload) => void;
+  'chat:read': (payload: ChatReadPayload) => void;
+  'chat:delivered': (payload: ChatDeliveredPayload) => void;
+  'chat:react': (payload: ChatReactPayload) => void;
+  'chat:edit': (payload: ChatEditPayload) => void;
+  'chat:delete': (payload: ChatDeletePayload) => void;
 }
 
 // Server-to-Client Socket Events
@@ -263,4 +390,13 @@ export interface ServerToClientEvents {
   'webrtc:offer': (payload: WebRTCOfferPayload) => void;
   'webrtc:answer': (payload: WebRTCAnswerPayload) => void;
   'webrtc:ice-candidate': (payload: WebRTCIceCandidatePayload) => void;
+
+  // Real-Time Ephemeral Chat Relay
+  'chat:message': (payload: { conversationId: string; message: Message }) => void;
+  'chat:typing': (payload: { conversationId: string; senderAppId: string; senderName: string; isTyping: boolean }) => void;
+  'chat:delivered': (payload: { conversationId: string; messageId: string; deliveredToAppId: string }) => void;
+  'chat:read': (payload: { conversationId: string; readByAppId: string; readAt: string }) => void;
+  'chat:reaction': (payload: { conversationId: string; messageId: string; userAppId: string; emoji: string; action: 'add' | 'remove' }) => void;
+  'chat:edited': (payload: { conversationId: string; messageId: string; content: string; updatedAt: string }) => void;
+  'chat:deleted': (payload: { conversationId: string; messageId: string }) => void;
 }

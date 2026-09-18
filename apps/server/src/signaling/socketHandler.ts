@@ -91,7 +91,7 @@ export function setupSocketHandler(io: Server): void {
     // Clients cannot claim to be a different appId
     // ──────────────────────────────────────────────────────────────
     socket.on('call:initiate', (payload: CallInitiatePayload, callback) => {
-      CallManager.initiateCall(socket, appId, name, payload.targetAppId, callback).catch(err => {
+      CallManager.initiateCall(socket, appId, name, payload.targetAppId, callback, payload.callType || 'audio').catch(err => {
         console.error('[SocketHandler] call:initiate error:', err);
         if (typeof callback === 'function') {
           callback({ success: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } });
@@ -126,6 +126,137 @@ export function setupSocketHandler(io: Server): void {
 
     socket.on('webrtc:ice-candidate', (payload: WebRTCIceCandidatePayload) => {
       CallManager.relayIceCandidate(socket, payload.callId, payload.candidate);
+    });
+
+    // ──────────────────────────────────────────────────────────────
+    // Real-Time Ephemeral 1-to-1 Chat Relay (Zero DB Persistence)
+    // ──────────────────────────────────────────────────────────────
+    socket.on('chat:send', (payload: any, callback) => {
+      try {
+        const { conversationId, targetAppId, message } = payload;
+        if (!targetAppId || !message) {
+          if (typeof callback === 'function') callback({ success: false, delivered: false, error: 'targetAppId and message required' });
+          return;
+        }
+
+        const cleanTargetId = targetAppId.replace(/\D/g, '');
+        // Enforce sender's verified identity from authenticated socket
+        const safeMessage = {
+          ...message,
+          senderAppId: cleanAppId,
+          senderName: socket.user!.name,
+          receiverAppId: cleanTargetId,
+        };
+
+        // Forward to recipient's live socket session(s)
+        const recipientSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+        const isDelivered = recipientSockets.length > 0;
+
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('chat:message', {
+            conversationId,
+            message: { ...safeMessage, status: 'delivered' },
+          });
+        }
+
+        if (typeof callback === 'function') {
+          callback({ success: true, delivered: isDelivered });
+        }
+      } catch (err: any) {
+        console.error('[SocketHandler] chat:send error:', err);
+        if (typeof callback === 'function') {
+          callback({ success: false, delivered: false, error: 'Failed to relay message' });
+        }
+      }
+    });
+
+    socket.on('chat:typing', (payload: { conversationId: string; targetAppId: string; isTyping: boolean }) => {
+      if (payload?.targetAppId) {
+        const cleanTargetId = payload.targetAppId.replace(/\D/g, '');
+        const recipientSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('chat:typing', {
+            conversationId: payload.conversationId,
+            senderAppId: cleanAppId,
+            senderName: socket.user!.name,
+            isTyping: !!payload.isTyping,
+          });
+        }
+      }
+    });
+
+    socket.on('chat:read', (payload: { conversationId: string; targetAppId: string; messageIds?: string[] }) => {
+      if (payload?.targetAppId) {
+        const cleanTargetId = payload.targetAppId.replace(/\D/g, '');
+        const recipientSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+        const now = new Date().toISOString();
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('chat:read', {
+            conversationId: payload.conversationId,
+            readByAppId: cleanAppId,
+            readAt: now,
+          });
+        }
+      }
+    });
+
+    socket.on('chat:delivered', (payload: { conversationId: string; targetAppId: string; messageId: string }) => {
+      if (payload?.targetAppId) {
+        const cleanTargetId = payload.targetAppId.replace(/\D/g, '');
+        const recipientSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('chat:delivered', {
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            deliveredToAppId: cleanAppId,
+          });
+        }
+      }
+    });
+
+    socket.on('chat:react', (payload: { conversationId: string; targetAppId: string; messageId: string; emoji: string; action?: 'add' | 'remove' }) => {
+      if (payload?.targetAppId) {
+        const cleanTargetId = payload.targetAppId.replace(/\D/g, '');
+        const recipientSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('chat:reaction', {
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            userAppId: cleanAppId,
+            emoji: payload.emoji,
+            action: payload.action || 'add',
+          });
+        }
+      }
+    });
+
+    socket.on('chat:edit', (payload: { conversationId: string; targetAppId: string; messageId: string; content: string }) => {
+      if (payload?.targetAppId) {
+        const cleanTargetId = payload.targetAppId.replace(/\D/g, '');
+        const recipientSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+        const now = new Date().toISOString();
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('chat:edited', {
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            content: payload.content,
+            updatedAt: now,
+          });
+        }
+      }
+    });
+
+    socket.on('chat:delete', (payload: { conversationId: string; targetAppId: string; messageId: string }) => {
+      if (payload?.targetAppId) {
+        const cleanTargetId = payload.targetAppId.replace(/\D/g, '');
+        const recipientSockets = PresenceManager.getSocketsForAppId(cleanTargetId);
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('chat:deleted', {
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+          });
+        }
+      }
     });
 
     // Disconnect Handling

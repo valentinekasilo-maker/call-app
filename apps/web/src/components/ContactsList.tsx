@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Phone, Trash2, Search, X, Copy, Check, User } from 'lucide-react';
+import { UserPlus, Phone, Video, MessageSquare, Trash2, Search, X, Copy, Check, User } from 'lucide-react';
 import { Contact, formatAppId, isValidAppId } from '@callapp/shared';
 import { useCall } from '../context/CallContext';
 import { useAuth } from '../context/AuthContext';
@@ -7,11 +7,13 @@ import { useAuth } from '../context/AuthContext';
 interface ContactsListProps {
   initialAddAppId?: string | null;
   onClearInitialAdd?: () => void;
+  onStartChat?: (appId: string) => void;
 }
 
 export const ContactsList: React.FC<ContactsListProps> = ({
   initialAddAppId,
   onClearInitialAdd,
+  onStartChat,
 }) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -361,37 +363,83 @@ export const ContactsList: React.FC<ContactsListProps> = ({
                   </div>
 
                   {/* Actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <button
-                      onClick={() => handleCopyAppId(contact.contactAppId)}
-                      style={{
-                        padding: '6px',
-                        color: 'var(--text-muted)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      title="Copy App ID"
-                    >
-                      {copiedId === contact.contactAppId ? <Check size={16} color="var(--accent-call)" /> : <Copy size={16} />}
-                    </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    {onStartChat && (
+                      <button
+                        onClick={() => onStartChat(contact.contactAppId)}
+                        style={{
+                          width: '34px',
+                          height: '34px',
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(10, 132, 255, 0.12)',
+                          color: 'var(--accent-primary)',
+                          border: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                        }}
+                        title="Chat"
+                      >
+                        <MessageSquare size={16} />
+                      </button>
+                    )}
 
                     <button
-                      onClick={() => initiateCall(contact.contactAppId)}
+                      onClick={() => initiateCall(contact.contactAppId, 'audio')}
                       disabled={!isConnected}
                       style={{
                         width: '34px',
                         height: '34px',
                         borderRadius: '50%',
-                        backgroundColor: 'var(--bg-surface-subtle)',
-                        color: 'var(--accent-call)',
+                        backgroundColor: 'rgba(52, 199, 89, 0.12)',
+                        color: '#34C759',
+                        border: 'none',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        cursor: 'pointer',
                       }}
-                      title="Call"
+                      title="Voice Call"
                     >
                       <Phone size={16} fill="currentColor" />
+                    </button>
+
+                    <button
+                      onClick={() => initiateCall(contact.contactAppId, 'video')}
+                      disabled={!isConnected}
+                      style={{
+                        width: '34px',
+                        height: '34px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(10, 132, 255, 0.12)',
+                        color: 'var(--accent-blue)',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                      title="Video Call"
+                    >
+                      <Video size={16} />
+                    </button>
+
+                    <button
+                      onClick={() => handleCopyAppId(contact.contactAppId)}
+                      style={{
+                        padding: '6px',
+                        color: 'var(--text-muted)',
+                        background: 'none',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                      title="Copy App ID"
+                    >
+                      {copiedId === contact.contactAppId ? <Check size={16} color="#34C759" /> : <Copy size={16} />}
                     </button>
 
                     <button
@@ -399,9 +447,12 @@ export const ContactsList: React.FC<ContactsListProps> = ({
                       style={{
                         padding: '6px',
                         color: 'var(--text-dim)',
+                        background: 'none',
+                        border: 'none',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        cursor: 'pointer',
                       }}
                       title="Delete Contact"
                     >
