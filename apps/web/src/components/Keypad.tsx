@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Phone, Video, Delete, Clipboard, Check, UserPlus } from 'lucide-react';
 import { useCall } from '../context/CallContext';
 import { useAuth } from '../context/AuthContext';
+import { useContacts } from '../context/ContactsContext';
 import { cleanAppId, formatAppId, CallType, SoundManager } from '@callapp/shared';
 
 interface KeypadButtonDef {
@@ -31,6 +32,7 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
   const [callNotice, setCallNotice] = useState<string | null>(null);
   const { initiateCall, isConnected } = useCall();
   const { token } = useAuth();
+  const { resolveContactDisplayName, isContactSaved } = useContacts();
   const backspaceTimerRef = useRef<any>(null);
 
   const handleDigit = useCallback((digit: string) => {
@@ -219,43 +221,47 @@ export const Keypad: React.FC<{ onAddContact?: (appId: string) => void }> = ({ o
         </div>
 
         {/* Action Link under Number (Add Number or Live User Status) */}
-        {lookupUser ? (
-          <div
-            style={{
-              marginTop: '4px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '2px 10px',
-              borderRadius: '12px',
-              backgroundColor: 'var(--bg-surface-subtle)',
-              border: '1px solid var(--border-glass-subtle)',
-              fontSize: '0.8rem',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            <span className={`presence-dot presence-${lookupUser.presence}`} />
-            <span style={{ fontWeight: 600 }}>{lookupUser.name}</span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'capitalize' }}>
-              ({lookupUser.presence})
-            </span>
-          </div>
-        ) : rawLength === 10 && onAddContact ? (
-          <button
-            onClick={() => onAddContact(cleanAppId(appIdInput))}
-            style={{
-              marginTop: '4px',
-              color: 'var(--accent-blue)',
-              fontSize: '0.82rem',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <UserPlus size={14} />
-            <span>Add Number</span>
-          </button>
+        {rawLength === 10 ? (
+          isContactSaved(cleanAppId(appIdInput)) || lookupUser ? (
+            <div
+              style={{
+                marginTop: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                backgroundColor: 'var(--bg-surface-subtle)',
+                border: '1px solid var(--border-glass-subtle)',
+                fontSize: '0.8rem',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <span className={`presence-dot presence-${lookupUser?.presence || 'offline'}`} />
+              <span style={{ fontWeight: 600 }}>{resolveContactDisplayName(cleanAppId(appIdInput), lookupUser?.name)}</span>
+              {lookupUser?.presence && (
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'capitalize' }}>
+                  ({lookupUser.presence})
+                </span>
+              )}
+            </div>
+          ) : onAddContact ? (
+            <button
+              onClick={() => onAddContact(cleanAppId(appIdInput))}
+              style={{
+                marginTop: '4px',
+                color: 'var(--accent-blue)',
+                fontSize: '0.82rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <UserPlus size={14} />
+              <span>Add Contact</span>
+            </button>
+          ) : null
         ) : rawLength === 0 ? (
           <button
             onClick={handlePasteClick}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, MessageSquare, ArrowRight, UserPlus, Clipboard } from 'lucide-react';
 import { isValidAppId, formatAppId } from '@callapp/shared';
+import { useContacts } from '../../context/ContactsContext';
 
 interface NewChatModalProps {
   onClose: () => void;
@@ -11,6 +12,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ onClose, onStartChat
   const [appIdInput, setAppIdInput] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const { resolveContactDisplayName, isContactSaved } = useContacts();
 
   const handlePaste = async () => {
     try {
@@ -184,8 +186,23 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ onClose, onStartChat
               </button>
             </div>
             {appIdInput.length === 10 && (
-              <div style={{ marginTop: '6px', fontSize: '0.8rem', color: 'var(--accent-primary)', fontWeight: 600 }}>
-                Formatted: {formatAppId(appIdInput)}
+              <div
+                style={{
+                  marginTop: '6px',
+                  fontSize: '0.8rem',
+                  color: 'var(--accent-primary)',
+                  fontWeight: 600,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span>Formatted: {formatAppId(appIdInput)}</span>
+                {isContactSaved(appIdInput) && (
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                    {resolveContactDisplayName(appIdInput)}
+                  </span>
+                )}
               </div>
             )}
           </div>

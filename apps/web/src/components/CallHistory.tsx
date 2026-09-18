@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, RotateCcw, Info } from 'lucide-react';
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, RotateCcw, Info } from 'lucide-react';
 import { CallRecord, formatAppId } from '@callapp/shared';
 import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
+import { useContacts } from '../context/ContactsContext';
 
 export const CallHistory: React.FC = () => {
   const [history, setHistory] = useState<CallRecord[]>([]);
@@ -10,6 +11,7 @@ export const CallHistory: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { user, token } = useAuth();
   const { initiateCall, isConnected } = useCall();
+  const { resolveContactDisplayName } = useContacts();
 
   const fetchHistory = async () => {
     if (!token) return;
@@ -138,7 +140,8 @@ export const CallHistory: React.FC = () => {
             {filteredHistory.map((call, index) => {
               const isOutgoing = call.callerAppId === user?.appId;
               const remoteAppId = isOutgoing ? call.receiverAppId : call.callerAppId;
-              const remoteName = isOutgoing ? call.receiverName || 'User' : call.callerName || 'User';
+              const rawRemoteName = isOutgoing ? call.receiverName || 'User' : call.callerName || 'User';
+              const remoteName = resolveContactDisplayName(remoteAppId, rawRemoteName);
               const isMissed = !isOutgoing && call.status === 'missed';
               const isDeclined = call.status === 'declined';
               const isCancelled = call.status === 'cancelled';
@@ -231,14 +234,14 @@ export const CallHistory: React.FC = () => {
                       {formatCallDate(call.startedAt)}
                     </span>
                     <button
-                      onClick={() => initiateCall(remoteAppId, call.callType || 'audio')}
+                      onClick={() => initiateCall(remoteAppId, 'audio')}
                       disabled={!isConnected}
                       style={{
                         width: '32px',
                         height: '32px',
                         borderRadius: '50%',
                         backgroundColor: 'var(--bg-surface-subtle)',
-                        color: call.callType === 'video' ? 'var(--accent-blue)' : 'var(--accent-call)',
+                        color: 'var(--accent-call)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -247,7 +250,7 @@ export const CallHistory: React.FC = () => {
                       }}
                       title={`Redial ${remoteName}`}
                     >
-                      {call.callType === 'video' ? <Video size={15} /> : <Phone size={15} fill="currentColor" />}
+                      <Phone size={15} fill="currentColor" />
                     </button>
                   </div>
                 </div>

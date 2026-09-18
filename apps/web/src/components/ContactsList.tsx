@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Phone, Video, MessageSquare, Trash2, Search, X, Copy, Check, User } from 'lucide-react';
+import { UserPlus, Phone, MessageSquare, Trash2, Search, X, Copy, Check, User } from 'lucide-react';
 import { Contact, formatAppId, isValidAppId } from '@callapp/shared';
 import { useCall } from '../context/CallContext';
 import { useAuth } from '../context/AuthContext';
+import { useContacts } from '../context/ContactsContext';
 
 interface ContactsListProps {
   initialAddAppId?: string | null;
@@ -15,13 +16,13 @@ export const ContactsList: React.FC<ContactsListProps> = ({
   onClearInitialAdd,
   onStartChat,
 }) => {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const { contacts, isLoading, addContact, deleteContact, refreshContacts, resolveContactDisplayName } = useContacts();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newAppId, setNewAppId] = useState<string>('');
   const [newName, setNewName] = useState<string>('');
   const [addError, setAddError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const { initiateCall, presenceMap, queryPresence, isConnected } = useCall();
@@ -35,30 +36,12 @@ export const ContactsList: React.FC<ContactsListProps> = ({
     }
   }, [initialAddAppId, onClearInitialAdd]);
 
-  const fetchContacts = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch('/api/contacts', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setContacts(data.contacts || []);
-        const appIds = (data.contacts || []).map((c: Contact) => c.contactAppId);
-        queryPresence(appIds);
-      }
-    } catch (e) {
-      console.error('Failed to load contacts:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchContacts();
-    const interval = setInterval(fetchContacts, 15000);
-    return () => clearInterval(interval);
-  }, [token]);
+    if (contacts.length > 0) {
+      const appIds = contacts.map(c => c.contactAppId);
+      queryPresence(appIds);
+    }
+  }, [contacts, queryPresence]);
 
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,42 +57,27 @@ export const ContactsList: React.FC<ContactsListProps> = ({
       return;
     }
 
+    if (!newName.trim()) {
+      setAddError('Please enter a contact name');
+      return;
+    }
+
     try {
-      const res = await fetch('/api/contacts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          contactAppId: newAppId.trim(),
-          contactName: newName.trim(),
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setAddError(data.error || 'Failed to add contact');
-        return;
-      }
-
+      setIsSubmitting(true);
+      await addContact(newAppId.trim(), newName.trim());
       setNewAppId('');
       setNewName('');
       setShowAddModal(false);
-      fetchContacts();
     } catch (err: any) {
       setAddError(err.message || 'Error adding contact');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteContact = async (contactId: string) => {
-    if (!token) return;
     try {
-      await fetch(`/api/contacts/${contactId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setContacts(prev => prev.filter(c => c.id !== contactId));
+      await deleteContact(contactId);
     } catch (e) {
       console.error('Error deleting contact:', e);
     }
@@ -348,7 +316,7 @@ export const ContactsList: React.FC<ContactsListProps> = ({
                           textOverflow: 'ellipsis',
                         }}
                       >
-                        {contact.contactName}
+                        {resolveContactDisplayName(contact.contactAppId, contact.contactName)}
                       </div>
                       <div
                         style={{
@@ -403,26 +371,6 @@ export const ContactsList: React.FC<ContactsListProps> = ({
                       title="Voice Call"
                     >
                       <Phone size={16} fill="currentColor" />
-                    </button>
-
-                    <button
-                      onClick={() => initiateCall(contact.contactAppId, 'video')}
-                      disabled={!isConnected}
-                      style={{
-                        width: '34px',
-                        height: '34px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(10, 132, 255, 0.12)',
-                        color: 'var(--accent-blue)',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                      }}
-                      title="Video Call"
-                    >
-                      <Video size={16} />
                     </button>
 
                     <button

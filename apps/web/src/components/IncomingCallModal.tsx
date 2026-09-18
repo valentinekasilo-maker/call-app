@@ -1,14 +1,17 @@
 import React from 'react';
 import { Phone, PhoneOff, Video } from 'lucide-react';
 import { useCall } from '../context/CallContext';
+import { useContacts } from '../context/ContactsContext';
 import { formatAppId } from '@callapp/shared';
 
 export const IncomingCallModal: React.FC = () => {
   const { callState, activeCall, acceptCall, rejectCall } = useCall();
+  const { resolveContactDisplayName } = useContacts();
 
   if (callState !== 'incoming_ringing' || !activeCall) return null;
 
   const isVideo = activeCall.callType === 'video';
+  const displayName = resolveContactDisplayName(activeCall.remoteAppId, activeCall.remoteName);
 
   return (
     <div
@@ -59,7 +62,7 @@ export const IncomingCallModal: React.FC = () => {
             marginBottom: '0.35rem',
           }}
         >
-          {activeCall.remoteName}
+          {displayName}
         </h1>
 
         <div
@@ -93,8 +96,8 @@ export const IncomingCallModal: React.FC = () => {
               : '0 12px 36px rgba(52, 199, 89, 0.45)',
           }}
         >
-          {activeCall.remoteName ? (
-            activeCall.remoteName.charAt(0).toUpperCase()
+          {displayName ? (
+            displayName.charAt(0).toUpperCase()
           ) : isVideo ? (
             <Video size={44} />
           ) : (

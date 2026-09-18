@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, Message, formatAppId, SoundManager } from '@callapp/shared';
 import {
   Phone,
-  Video,
   ChevronLeft,
   Paperclip,
   Send,
@@ -20,9 +19,11 @@ import {
   X,
   Shield,
   Clock,
+  UserPlus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCall } from '../../context/CallContext';
+import { useContacts } from '../../context/ContactsContext';
 import { VoiceRecorder } from './VoiceRecorder';
 
 interface ConversationViewProps {
@@ -62,6 +63,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 }) => {
   const { user } = useAuth();
   const { initiateCall, presenceMap } = useCall();
+  const { resolveContactDisplayName, isContactSaved, addContact } = useContacts();
 
   const userAppId = user?.appId?.replace(/\D/g, '') || '';
   const [inputContent, setInputContent] = useState<string>('');
@@ -72,9 +74,18 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
 
+  // Add Contact modal states
+  const [showAddContactModal, setShowAddContactModal] = useState<boolean>(false);
+  const [customContactName, setCustomContactName] = useState<string>('');
+  const [addContactLoading, setAddContactLoading] = useState<boolean>(false);
+  const [addContactError, setAddContactError] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const docInputRef = useRef<HTMLInputElement | null>(null);
   const audioElementsRef = useRef<Record<string, HTMLAudioElement>>({});
+
+  const displayName = resolveContactDisplayName(conversation.contactAppId, conversation.contactName);
+  const isSaved = isContactSaved(conversation.contactAppId);
 
   const presence = presenceMap[conversation.contactAppId] || 'offline';
   const isTyping = typingUsers.length > 0;
@@ -256,7 +267,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                 fontSize: '1rem',
               }}
             >
-              {conversation.contactName?.charAt(0) || 'U'}
+              {displayName?.charAt(0).toUpperCase() || 'U'}
             </div>
             <span
               style={{
@@ -289,7 +300,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                   textOverflow: 'ellipsis',
                 }}
               >
-                {conversation.contactName}
+                {displayName}
               </span>
             </div>
             <div style={{ fontSize: '0.75rem', color: isTyping ? 'var(--accent-primary)' : 'var(--text-secondary)' }}>
@@ -300,8 +311,36 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           </div>
         </div>
 
-        {/* Action Controls (Voice & Video Calling) */}
+        {/* Action Controls (Voice Calling + Add Contact when unsaved) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {!isSaved && (
+            <button
+              onClick={() => {
+                setCustomContactName('');
+                setAddContactError(null);
+                setShowAddContactModal(true);
+              }}
+              title="Add to Contacts"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 12px',
+                borderRadius: '20px',
+                backgroundColor: 'rgba(10, 132, 255, 0.12)',
+                border: '1px solid rgba(10, 132, 255, 0.25)',
+                color: 'var(--accent-primary)',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <UserPlus size={15} />
+              <span>Add Contact</span>
+            </button>
+          )}
+
           <button
             onClick={() => initiateCall(conversation.contactAppId, 'audio')}
             title="Voice Call"
@@ -321,47 +360,6 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           >
             <Phone size={18} fill="currentColor" />
           </button>
-
-          <button
-            onClick={() => initiateCall(conversation.contactAppId, 'video')}
-            title="Video Call"
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(10, 132, 255, 0.12)',
-              border: '1px solid rgba(10, 132, 255, 0.3)',
-              color: 'var(--accent-blue)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <Video size={18} />
-          </button>
-
-          {onDeleteConversation && (
-            <button
-              onClick={() => {
-                if (window.confirm(`Clear local chat history with ${conversation.contactName}?`)) {
-                  onDeleteConversation(conversation.id);
-                }
-              }}
-              title="Delete Local Chat"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-                padding: '6px',
-                borderRadius: '50%',
-              }}
-            >
-              <Trash2 size={17} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -858,6 +856,160 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           </>
         )}
       </div>
+
+      {/* Add Contact Modal Dialog */}
+      {showAddContactModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setShowAddContactModal(false)}
+        >
+          <div
+            className="liquid-glass"
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              borderRadius: '24px',
+              padding: '24px',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-glass)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.35)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Add Contact
+              </h3>
+              <button
+                onClick={() => setShowAddContactModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
+                App ID
+              </label>
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-glass)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {formatAppId(conversation.contactAppId)}
+              </div>
+            </div>
+
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                if (!customContactName.trim()) {
+                  setAddContactError('Please enter a contact name');
+                  return;
+                }
+                try {
+                  setAddContactLoading(true);
+                  setAddContactError(null);
+                  await addContact(conversation.contactAppId, customContactName.trim());
+                  setShowAddContactModal(false);
+                  setCustomContactName('');
+                } catch (err: any) {
+                  setAddContactError(err.message || 'Failed to save contact');
+                } finally {
+                  setAddContactLoading(false);
+                }
+              }}
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
+                  Contact Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. John"
+                  value={customContactName}
+                  onChange={e => setCustomContactName(e.target.value)}
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    backgroundColor: 'var(--bg-input)',
+                    border: '1px solid var(--border-glass)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {addContactError && (
+                <div style={{ color: 'var(--accent-hangup)', fontSize: '0.8rem', marginBottom: '12px' }}>
+                  {addContactError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddContactModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '14px',
+                    backgroundColor: 'var(--bg-input)',
+                    border: '1px solid var(--border-glass)',
+                    color: 'var(--text-primary)',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addContactLoading}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '14px',
+                    backgroundColor: 'var(--accent-primary)',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    opacity: addContactLoading ? 0.7 : 1,
+                  }}
+                >
+                  {addContactLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

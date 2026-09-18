@@ -11,6 +11,7 @@ import {
   SwitchCamera,
 } from 'lucide-react';
 import { useCall } from '../context/CallContext';
+import { useContacts } from '../context/ContactsContext';
 import { formatAppId, SoundManager } from '@callapp/shared';
 
 export const ActiveCallModal: React.FC<{ onOpenAudioSettings?: () => void }> = ({
@@ -30,6 +31,7 @@ export const ActiveCallModal: React.FC<{ onOpenAudioSettings?: () => void }> = (
     remoteStream,
     availableVideoInputs,
   } = useCall();
+  const { resolveContactDisplayName } = useContacts();
 
   const [showInCallKeypad, setShowInCallKeypad] = useState<boolean>(false);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -52,6 +54,7 @@ export const ActiveCallModal: React.FC<{ onOpenAudioSettings?: () => void }> = (
   if (callState !== 'active_call' || !activeCall) return null;
 
   const isVideoCall = activeCall.callType === 'video';
+  const displayName = resolveContactDisplayName(activeCall.remoteAppId, activeCall.remoteName);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -246,7 +249,7 @@ export const ActiveCallModal: React.FC<{ onOpenAudioSettings?: () => void }> = (
             marginBottom: '0.15rem',
           }}
         >
-          {activeCall.remoteName}
+          {displayName}
         </h1>
 
         <div
@@ -327,7 +330,7 @@ export const ActiveCallModal: React.FC<{ onOpenAudioSettings?: () => void }> = (
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
             }}
           >
-            {activeCall.remoteName ? activeCall.remoteName.charAt(0).toUpperCase() : 'U'}
+            {displayName ? displayName.charAt(0).toUpperCase() : 'U'}
           </div>
         </div>
       )}

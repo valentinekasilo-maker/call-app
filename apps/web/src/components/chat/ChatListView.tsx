@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCall } from '../../context/CallContext';
+import { useContacts } from '../../context/ContactsContext';
 
 interface ChatListViewProps {
   conversations: Conversation[];
@@ -31,6 +32,7 @@ export const ChatListView: React.FC<ChatListViewProps> = ({
 }) => {
   const { user } = useAuth();
   const { presenceMap } = useCall();
+  const { resolveContactDisplayName } = useContacts();
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterType, setFilterType] = useState<'all' | 'unread'>('all');
@@ -41,7 +43,8 @@ export const ChatListView: React.FC<ChatListViewProps> = ({
 
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    const nameMatch = c.contactName?.toLowerCase().includes(q);
+    const resolved = resolveContactDisplayName(c.contactAppId, c.contactName).toLowerCase();
+    const nameMatch = resolved.includes(q) || c.contactName?.toLowerCase().includes(q);
     const appIdMatch = c.contactAppId?.includes(q);
     const lastMsgMatch = c.lastMessagePreview?.toLowerCase().includes(q);
     return nameMatch || appIdMatch || lastMsgMatch;
@@ -251,6 +254,7 @@ export const ChatListView: React.FC<ChatListViewProps> = ({
             const typingList = typingState[conv.id] || [];
             const isTyping = typingList.length > 0;
             const presence = presenceMap[conv.contactAppId] || 'offline';
+            const displayName = resolveContactDisplayName(conv.contactAppId, conv.contactName);
 
             return (
               <div
@@ -286,7 +290,7 @@ export const ChatListView: React.FC<ChatListViewProps> = ({
                       fontSize: '1.1rem',
                     }}
                   >
-                    {conv.contactName?.charAt(0) || 'U'}
+                    {displayName?.charAt(0).toUpperCase() || 'U'}
                   </div>
 
                   {/* Presence Dot */}
@@ -323,7 +327,7 @@ export const ChatListView: React.FC<ChatListViewProps> = ({
                           textOverflow: 'ellipsis',
                         }}
                       >
-                        {conv.contactName}
+                        {displayName}
                       </span>
                       <span
                         style={{
